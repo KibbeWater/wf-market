@@ -32,42 +32,17 @@ NOTE: Not reusing the device_id may generate multiple devices on a user's device
 
 ## Find the price of Ayatan Sculptures
 ```rust
-use wf_market::{
-    client::Client,
-    utils::generate_device_id,
-};
 
-#[tokio::main]
-async fn main() {
-    let mut client = Client::new();
-
-    match client.get_items().await {
-        Ok(mut items) => {
-            items = items.iter()
-                        .filter(|item| item.is_sculpture())
-                        .collect();
-            println!("Sculpture Valuation:");
-            for item in items {
-                let sculpture = item.to_sculpture().unwrap();
-                println!("{}: {} endo", 
-                    sculpture.get_name(), 
-                    sculpture.calculate_value(None, None));
-            }
-        },
-        Err(e) => println!("Error: {:?}", e),
-    }
-}
 ```
 */
 
-pub mod types;
-pub mod error;
 pub mod client;
+pub mod endpoints;
+pub mod enums;
+pub mod errors;
+pub mod types;
 pub mod utils;
-
-mod oauth;
-
-pub use client::Client;
+// pub use client::Client;
 
 #[cfg(test)]
 mod tests;

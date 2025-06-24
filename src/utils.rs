@@ -1,26 +1,37 @@
-/*!
-Small utility package for common actions
-*/
+use std::num::NonZeroU32;
 
-use rand::Rng;
-use std::format;
+use governor::{
+    Quota, RateLimiter,
+    clock::DefaultClock,
+    state::{InMemoryState, NotKeyed},
+};
 
 /**
-Generate a random Device ID to identify your device in the backend
+INTERNAL: Build the HTTP client with default settings
 
-# Notes
-Result of this should be stored and reused upon usage, this will uniquely identify
-every device used on the account
+# Arguments
+- `auth`: Authentication token used when communicating with authenticated endpoints
 
 # Returns
-A random ID of format `d-${16 random characters}`
+- A `reqwest::Client` with assigned default headers
 */
-pub fn generate_device_id() -> String {
-    let mut rng = rand::rng();
-    let chars: Vec<char> = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".chars().collect();
-    let random_string: String = (0..16)
-        .map(|_| chars[rng.random_range(0..chars.len())])
-        .collect();
-    
-    format!("d-{}", random_string)
+pub(super) fn build_http(auth: Option<String>) -> reqwest::Client {
+    let mut headers = reqwest::header::HeaderMap::new();
+    if let Some(auth) = auth {
+        headers.insert(reqwest::header::AUTHORIZATION, auth.parse().unwrap());
+    }
+    headers.insert("language", "en".parse().unwrap());
+    headers.insert("platform", "pc".parse().unwrap());
+
+    reqwest::Client::builder()
+        .default_headers(headers)
+        .build()
+        .unwrap()
+}
+
+/**
+INTERNAL: Build the rate limiter for throttling outgoing requests to max allowed speeds
+*/
+pub(super) fn build_limiter(rps: NonZeroU32) -> RateLimiter<NotKeyed, InMemoryState, DefaultClock> {
+    RateLimiter::direct(Quota::per_second(rps))
 }

@@ -1,27 +1,12 @@
 use serde::Serialize;
 
-use crate::types::item::OrderType;
+use crate::enums::OrderType;
 
-#[derive(Serialize, Default)]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct OrderUpdateParams {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub platinum: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub quantity: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub per_trade: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub rank: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub visible: Option<bool>,
-}
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct OrderCreationRequest {
+pub struct CreateOrderParams {
     pub item_id: String,
-    #[serde(rename = "type")]
+    #[serde(rename = "type", default)]
     pub order_type: OrderType,
     pub platinum: i32,
     pub quantity: i32,
@@ -47,7 +32,7 @@ pub struct OrderCreationRequest {
     pub cyan_stars: Option<u32>,
 }
 
-impl OrderCreationRequest {
+impl CreateOrderParams {
     pub fn new(
         item_id: &str,
         order_type: OrderType,
@@ -55,7 +40,7 @@ impl OrderCreationRequest {
         quantity: i32,
         visible: bool,
     ) -> Self {
-        OrderCreationRequest {
+        CreateOrderParams {
             item_id: item_id.to_string(),
             order_type,
             platinum,
@@ -70,7 +55,7 @@ impl OrderCreationRequest {
         }
     }
 
-    pub fn with_mods(mut self, rank: u8) -> Self {
+    pub fn with_rank(mut self, rank: u8) -> Self {
         self.rank = Some(rank);
         self
     }

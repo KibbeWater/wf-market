@@ -1,23 +1,16 @@
-use crate::types::user::MinimalUser;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Clone, Copy, Deserialize, Debug, Eq, PartialEq)]
-pub enum OrderType {
-    #[serde(rename = "buy")]
-    Buy,
-    #[serde(rename = "sell")]
-    Sell,
-}
+use crate::types::UserShort;
 
-#[derive(Clone, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Transaction {
     pub id: String,
     #[serde(rename = "type")]
     pub order_type: String,
     #[serde(rename = "originId")]
     pub origin_id: String,
-    pub platinum: i32,
-    pub quantity: i32,
+    pub platinum: u32,
+    pub quantity: u32,
     #[serde(rename = "createdAt")]
     pub created_at: String,
     #[serde(rename = "updatedAt")]
@@ -40,7 +33,7 @@ pub struct TransactionItem {
 pub struct TransactionWithUser {
     #[serde(flatten)]
     pub transaction: Transaction,
-    pub user: MinimalUser,
+    pub user: UserShort,
 }
 
 impl TransactionWithUser {
