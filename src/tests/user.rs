@@ -37,3 +37,25 @@ async fn get_by_id() {
 }
 
 // Can Run on Authenticated Client
+#[tokio::test]
+async fn me() {
+    let client = setup_client().await.unwrap();
+    let user = client.user().me().await.unwrap();
+    println!("Current User: {:?}", user);
+}
+
+#[tokio::test]
+async fn update_profile() {
+    let client = setup_client().await.unwrap();
+
+    let params = UpdateUserPrivateParams::new()
+        .with_about("New profile description")
+        .with_platform(Platform::Mobile)
+        .with_crossplay(true)
+        .with_locale(Language::Portuguese)
+        .with_theme(Theme::Light)
+        .with_sync_locale(true)
+        .with_sync_theme(true);
+    let user = client.user().update_profile(params).await.unwrap();
+    println!("User by id: {:?}", user);
+}

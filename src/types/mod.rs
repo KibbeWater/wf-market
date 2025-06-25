@@ -13,6 +13,9 @@ pub use user_short::*;
 mod update_order;
 pub use update_order::*;
 
+pub mod update_user_private;
+pub use update_user_private::*;
+
 pub mod create_order;
 pub use create_order::*;
 
@@ -27,6 +30,9 @@ pub use top_orders::*;
 
 pub mod user;
 pub use user::*;
+
+pub mod user_private;
+pub use user_private::*;
 
 pub mod achievement;
 pub use achievement::*;

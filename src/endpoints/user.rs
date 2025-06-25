@@ -85,4 +85,59 @@ impl<State> UserRoute<State> {
     }
 }
 
-impl<State> UserRoute<State> where State: IsUnauthenticated + Clone + 'static {}
+impl<State> UserRoute<State> where State: IsUnauthenticated + Clone + 'static {
+    /**
+     * Fetches the authenticated user's private profile.
+     * # Returns
+     * - `Ok(UserPrivate)` if the user was found
+     * - `Err(ApiError)` if there was an error fetching the user
+     */
+    pub async fn me(&self) -> Result<UserPrivate, ApiError> {
+        let client = self.client.upgrade().expect("Client should not be dropped");
+
+        match client
+            .as_ref()
+            .call_api::<ApiResultV2<UserPrivate>>(
+                ApiVersion::V2,
+                Method::GET,
+                "/me",
+                None,
+                None,
+            )
+            .await
+        {
+            Ok((user, _headers)) => Ok(user.data),
+            Err(e) => {
+                return Err(e);
+            }
+        }
+    }
+    /**
+     * Updates the authenticated user's private profile.
+     * # Arguments
+     * - `args`: The parameters to update the user's private profile.
+     * # Returns
+     * - `Ok(UserPrivate)` if the update was successful
+     * - `Err(ApiError)` if there was an error updating the user
+     */
+    pub async fn update_profile(&self, args: UpdateUserPrivateParams) -> Result<UserPrivate, ApiError> {
+        let client = self.client.upgrade().expect("Client should not be dropped");
+
+        match client
+            .as_ref()
+            .call_api::<ApiResultV2<UserPrivate>>(
+                ApiVersion::V2,
+                Method::PATCH,
+                "/me",
+                Some(json!(args)),
+                None,
+            )
+            .await
+        {
+            Ok((user, _headers)) => Ok(user.data),
+            Err(e) => {
+                return Err(e);
+            }
+        }
+    }
+}
