@@ -29,6 +29,21 @@ pub trait IsUnauthenticated {}
 impl IsAuthenticated for Authenticated {}
 impl IsUnauthenticated for Unauthenticated {}
 
+#[derive(Debug, Clone)]
+pub struct Client<State = Unauthenticated> {
+    self_arc: OnceLock<Arc<Client<State>>>,
+    token: String,
+    device_id: String,
+    language: Language,
+    platform: Platform,
+    crossplay: bool,
+    limiter: Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>,
+    manifest_route: OnceLock<Arc<ManifestRoute<State>>>,
+    order_route: OnceLock<Arc<OrderRoute<State>>>,
+    user_route: OnceLock<Arc<UserRoute<State>>>,
+    authentication_route: OnceLock<Arc<AuthenticationRoute<State>>>,
+    _state: PhantomData<State>,
+}
 impl<State: Clone + 'static> Client<State> {
     fn arc(&self) -> Arc<Self> {
         self.self_arc
@@ -40,6 +55,7 @@ impl<State: Clone + 'static> Client<State> {
                     platform: self.platform,
                     language: self.language,
                     crossplay: self.crossplay,
+                    manifest_route: self.manifest_route.clone(),
                     order_route: self.order_route.clone(),
                     user_route: self.user_route.clone(),
                     authentication_route: self.authentication_route.clone(),
@@ -158,6 +174,7 @@ impl<State: Clone + 'static> Client<State> {
             Err(_) => Err(ApiError::RequestError),
         }
     }
+
     /**
     Set the language for the client
     # Arguments
@@ -169,6 +186,7 @@ impl<State: Clone + 'static> Client<State> {
         self.language = language;
         self
     }
+
     /**
     Set the platform for the client
     # Arguments
@@ -180,6 +198,7 @@ impl<State: Clone + 'static> Client<State> {
         self.platform = platform;
         self
     }
+
     /**
     Set the crossplay setting for the client
     # Arguments
@@ -192,6 +211,11 @@ impl<State: Clone + 'static> Client<State> {
         self
     }
     // Endpoint methods to access routes
+    pub fn manifest(&self) -> Arc<ManifestRoute<State>> {
+        self.manifest_route
+            .get_or_init(|| ManifestRoute::new(self.arc()))
+            .clone()
+    }
     pub fn order(&self) -> Arc<OrderRoute<State>> {
         self.order_route
             .get_or_init(|| OrderRoute::new(self.arc()))
@@ -209,21 +233,6 @@ impl<State: Clone + 'static> Client<State> {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct Client<State = Unauthenticated> {
-    self_arc: OnceLock<Arc<Client<State>>>,
-    token: String,
-    device_id: String,
-    language: Language,
-    platform: Platform,
-    crossplay: bool,
-    limiter: Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>,
-    order_route: OnceLock<Arc<OrderRoute<State>>>,
-    user_route: OnceLock<Arc<UserRoute<State>>>,
-    authentication_route: OnceLock<Arc<AuthenticationRoute<State>>>,
-    _state: PhantomData<State>,
-}
-
 impl Client<Unauthenticated> {
     pub fn new() -> Self {
         Self {
@@ -233,6 +242,7 @@ impl Client<Unauthenticated> {
             language: Language::default(),
             platform: Platform::default(),
             crossplay: true,
+            manifest_route: OnceLock::new(),
             order_route: OnceLock::new(),
             user_route: OnceLock::new(),
             authentication_route: OnceLock::new(),
@@ -240,7 +250,15 @@ impl Client<Unauthenticated> {
             _state: PhantomData,
         }
     }
-
+    /**
+     * Creates a new `Client` with the specified parameters.
+     * # Arguments
+     * - `username`: The username to use for authentication
+     * - `password`: The password to use for authentication
+     * - `device_id`: The device ID to use for authentication
+     * # Returns
+     * A `Result` containing the authenticated `Client` or an `AuthError` if authentication fails.
+     */
     pub async fn login(
         self,
         username: &str,
@@ -263,6 +281,7 @@ impl Client<Unauthenticated> {
             platform: self.platform,
             language: self.language,
             crossplay: self.crossplay,
+            manifest_route: OnceLock::new(),
             order_route: OnceLock::new(),
             user_route: OnceLock::new(),
             authentication_route: OnceLock::new(),
@@ -276,6 +295,11 @@ impl Client<Unauthenticated> {
         arc.self_arc.set(arc.clone()).unwrap();
 
         // Copy routes if they were initialized
+        if let Some(manifest) = self.manifest_route.get() {
+            arc.manifest_route
+                .set(ManifestRoute::from_existing(manifest, arc.clone()))
+                .ok();
+        }
         if let Some(order) = self.order_route.get() {
             arc.order_route
                 .set(OrderRoute::from_existing(order, arc.clone()))
@@ -286,6 +310,12 @@ impl Client<Unauthenticated> {
                 .set(UserRoute::from_existing(user, arc.clone()))
                 .ok();
         }
+        if let Some(auth) = self.authentication_route.get() {
+            arc.authentication_route
+                .set(AuthenticationRoute::from_existing(auth, arc.clone()))
+                .ok();
+        }
+        // Return the new authenticated client
 
         Ok(Arc::try_unwrap(arc).unwrap_or_else(|arc| (*arc).clone()))
     }

@@ -6,3 +6,6 @@ pub use order::*;
 
 pub mod authentication;
 pub use authentication::*;
+
+pub mod manifest;
+pub use manifest::*;
