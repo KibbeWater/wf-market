@@ -32,7 +32,6 @@ impl<State: Clone + 'static> Client<State> {
         self.self_arc
             .get_or_init(|| {
                 Arc::new(Self {
-                    http: self.http.clone(),
                     self_arc: OnceLock::new(),
                     token: self.token.clone(),
                     device_id: self.device_id.clone(),
@@ -78,7 +77,7 @@ impl<State: Clone + 'static> Client<State> {
         }
 
         // Create the HTTP client with the headers
-        let http_client =reqwest::Client::builder()
+        let http_client = reqwest::Client::builder()
         .default_headers(headers)
         .build()
         .unwrap();
@@ -202,7 +201,6 @@ impl<State: Clone + 'static> Client<State> {
 
 #[derive(Debug, Clone)]
 pub struct Client<State = Unauthenticated> {
-    http: reqwest::Client,
     self_arc: OnceLock<Arc<Client<State>>>,
     token: String,
     device_id: String,
@@ -219,7 +217,6 @@ pub struct Client<State = Unauthenticated> {
 impl Client<Unauthenticated> {
     pub fn new() -> Self {
         Self {
-            http: build_http(None),
             self_arc: OnceLock::new(),
             token: String::new(),
             device_id: String::new(),
@@ -250,7 +247,6 @@ impl Client<Unauthenticated> {
         };
 
         let new_client = Client::<Authenticated> {
-            http: build_http(Some(format!("Bearer {}", token))),
             self_arc: OnceLock::new(),
             token,
             device_id: device_id.to_string(),
