@@ -62,7 +62,7 @@ async fn get_by_id() {
     println!("Order: {:?}", order);
 }
 
-// Can Run on Authenticated Client
+// Can Only Run on Authenticated Client
 #[tokio::test]
 async fn my_orders() {
     let client = setup_client().await.unwrap();

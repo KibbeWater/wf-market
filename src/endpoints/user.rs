@@ -1,5 +1,8 @@
 use std::sync::{Arc, Weak};
 
+use reqwest::Method;
+use serde_json::json;
+
 use crate::{
     client::{Client, IsAuthenticated},
     enums::*,
@@ -12,7 +15,7 @@ pub struct UserRoute<State> {
     client: Weak<Client<State>>,
 }
 
-impl<State> UserRoute<State> {
+impl<State: Clone + 'static> UserRoute<State> {
     /**
      * Creates a new `UserRoute` with an empty User list.
      * The `client` parameter is an `Arc<Client<State>>` that allows the route
@@ -24,7 +27,7 @@ impl<State> UserRoute<State> {
     }
     /**
      * Fetches the a user by their slug.
-    * # Returns
+     * # Returns
      * - `Ok(User)` if the user was found
      * - `Err(ApiError)` if there was an error fetching the user
      */
@@ -85,7 +88,10 @@ impl<State> UserRoute<State> {
     }
 }
 
-impl<State> UserRoute<State> where State: IsUnauthenticated + Clone + 'static {
+impl<State> UserRoute<State>
+where
+    State: IsAuthenticated + Clone + 'static,
+{
     /**
      * Fetches the authenticated user's private profile.
      * # Returns
@@ -97,13 +103,7 @@ impl<State> UserRoute<State> where State: IsUnauthenticated + Clone + 'static {
 
         match client
             .as_ref()
-            .call_api::<ApiResultV2<UserPrivate>>(
-                ApiVersion::V2,
-                Method::GET,
-                "/me",
-                None,
-                None,
-            )
+            .call_api::<ApiResultV2<UserPrivate>>(ApiVersion::V2, Method::GET, "/me", None, None)
             .await
         {
             Ok((user, _headers)) => Ok(user.data),
@@ -120,7 +120,10 @@ impl<State> UserRoute<State> where State: IsUnauthenticated + Clone + 'static {
      * - `Ok(UserPrivate)` if the update was successful
      * - `Err(ApiError)` if there was an error updating the user
      */
-    pub async fn update_profile(&self, args: UpdateUserPrivateParams) -> Result<UserPrivate, ApiError> {
+    pub async fn update_profile(
+        &self,
+        args: UpdateUserPrivateParams,
+    ) -> Result<UserPrivate, ApiError> {
         let client = self.client.upgrade().expect("Client should not be dropped");
 
         match client

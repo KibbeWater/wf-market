@@ -1,7 +1,7 @@
 use serde::Deserialize;
 
-use crate::types::*;
 use crate::enums::*;
+use crate::types::*;
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct LinkedAccounts {
@@ -56,8 +56,11 @@ pub struct UserPrivate {
     pub theme: String,
 
     /// List of achievements the user chose to showcase.
-    #[serde(rename = "achievementShowcase")]
-    pub achievement_showcase: Vec<Achievement>,
+    #[serde(
+        rename = "achievementShowcase",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub achievement_showcase: Option<Vec<Achievement>>,
 
     /// Verification status.
     pub verification: bool,
@@ -66,7 +69,8 @@ pub struct UserPrivate {
     pub check_code: String,
 
     /// Subscription tier.
-    pub tier: Tier,
+    #[serde(rename = "tier", skip_serializing_if = "Option::is_none")]
+    pub tier: Option<Tier>,
     /// Subscription status.
     pub subscription: bool,
 
@@ -90,10 +94,10 @@ pub struct UserPrivate {
     #[serde(rename = "reviewsLeft")]
     pub reviews_left: i16,
     /// Count of unread messages.
-    #[serde(rename = "unreadMessages")]
+    #[serde(rename = "unreadMessages", default)]
     pub unread_messages: i16,
     /// List of ignored users.
-    #[serde(rename = "ignoreList")]
+    #[serde(rename = "ignoreList", default)]
     pub ignore_list: Vec<String>,
 
     /// Flag for pending deletion of the account.
@@ -103,9 +107,6 @@ pub struct UserPrivate {
     #[serde(rename = "deleteAt", skip_serializing_if = "Option::is_none")]
     pub delete_at: Option<String>,
 
-    /// Accounts linked with the user's profile.
-    #[serde(rename = "linkedAccounts")]
-    pub linked_accounts: LinkedAccounts,
     /// If the user has an email address.
     #[serde(rename = "hasEmail")]
     pub has_email: bool,

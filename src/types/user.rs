@@ -1,6 +1,5 @@
 use serde::Deserialize;
 
-use crate::enums::*;
 use crate::types::*;
 
 #[derive(Deserialize, Clone, Debug)]
@@ -33,8 +32,11 @@ pub struct User {
     pub locale: String,
 
     /// List of achievements the user chose to showcase.
-    #[serde(rename = "achievementShowcase")]
-    pub achievement_showcase: Vec<Achievement>,
+    #[serde(
+        rename = "achievementShowcase",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub achievement_showcase: Option<Vec<Achievement>>,
 
     /// Current status of the user.
     pub status: String,

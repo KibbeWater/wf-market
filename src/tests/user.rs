@@ -2,7 +2,7 @@ use crate::{
     client::{Authenticated, Client},
     enums::*,
     errors::AuthError,
-    types::{CreateOrderParams, TopOrdersFilters, UpdateOrderParams},
+    types::*,
 };
 use dotenv::dotenv;
 use std::env;
@@ -23,20 +23,20 @@ async fn setup_client() -> Result<Client<Authenticated>, AuthError> {
 // Can Run on any Client
 #[tokio::test]
 async fn get_by_slug() {
-    let slug = ""; // User slug to fetch
+    let slug = "arcee-prime"; // User slug to fetch
     let client = Client::new();
     let user = client.user().get_by_slug(slug).await.unwrap();
     println!("User by slug: {:?}", user);
 }
 #[tokio::test]
 async fn get_by_id() {
-    let id = ""; // User ID to fetch
+    let id = "656e3f640549dc1d35dae454"; // User ID to fetch
     let client = Client::new();
-    let user = client.user().get_by_slug(id).await.unwrap();
+    let user = client.user().get_by_id(id).await.unwrap();
     println!("User by id: {:?}", user);
 }
 
-// Can Run on Authenticated Client
+// Can Only Run on Authenticated Client
 #[tokio::test]
 async fn me() {
     let client = setup_client().await.unwrap();
@@ -50,7 +50,7 @@ async fn update_profile() {
 
     let params = UpdateUserPrivateParams::new()
         .with_about("New profile description")
-        .with_platform(Platform::Mobile)
+        .with_platform(Platform::Pc)
         .with_crossplay(true)
         .with_locale(Language::Portuguese)
         .with_theme(Theme::Light)

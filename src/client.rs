@@ -4,7 +4,10 @@ use governor::{
     clock::DefaultClock,
     state::{InMemoryState, NotKeyed},
 };
-use reqwest::{Method, header::HeaderMap};
+use reqwest::{
+    Method,
+    header::{HeaderMap, HeaderName, HeaderValue},
+};
 use serde::Serialize;
 use serde_json::Value;
 use std::{
@@ -57,30 +60,36 @@ impl<State: Clone + 'static> Client<State> {
         headers: Option<HashMap<String, String>>,
     ) -> Result<(T, HeaderMap), ApiError> {
         let url = version.as_str().to_owned() + path;
-        let mut headers = reqwest::header::HeaderMap::new();
+        let mut default_headers = reqwest::header::HeaderMap::new();
 
         // Add the required headers
-        headers.insert("language", self.language.as_str().parse().unwrap());
-        headers.insert("platform", self.platform.as_str().parse().unwrap());
-        headers.insert("crossplay", self.crossplay.to_string().parse().unwrap());
-        
+        default_headers.insert("language", self.language.as_str().parse().unwrap());
+        default_headers.insert("platform", self.platform.as_str().parse().unwrap());
+        default_headers.insert("crossplay", self.crossplay.to_string().parse().unwrap());
+
         // If the client is authenticated, add the token to the headers
         if self.token != "" {
-            headers.insert(reqwest::header::AUTHORIZATION, format!("Bearer {}", self.token));
+            default_headers.insert(
+                reqwest::header::AUTHORIZATION,
+                format!("Bearer {}", self.token).parse().unwrap(),
+            );
         }
 
         // Add any additional headers provided
-       if let Some(hards) = headers {
-            for (key, value) in hards.iter() {
-                headers.insert(key.parse().unwrap(), value.parse().unwrap());
+        if let Some(ref items) = headers {
+            for (key, value) in items.iter() {
+                default_headers.insert(
+                    HeaderName::from_bytes(key.as_bytes()).unwrap(),
+                    HeaderValue::from_str(value).unwrap(),
+                );
             }
         }
 
         // Create the HTTP client with the headers
         let http_client = reqwest::Client::builder()
-        .default_headers(headers)
-        .build()
-        .unwrap();
+            .default_headers(default_headers)
+            .build()
+            .unwrap();
 
         let mut builder = http_client.request(method, &url);
         // If the client needs a body, serialize it
@@ -120,8 +129,9 @@ impl<State: Clone + 'static> Client<State> {
                             Err(e) => {
                                 return Err(ApiError::ParsingError(
                                     format!(
-                                        "Error Parsing Bad Request Error: {:?}, Message: {}",
-                                        e, body
+                                        "Error Parsing Bad Request Error: {:?}, Body: {:?}",
+                                        e,
+                                        body.to_string()
                                     )
                                     .to_string(),
                                 ));
@@ -140,9 +150,10 @@ impl<State: Clone + 'static> Client<State> {
 
                 match data {
                     Ok(data) => Ok((data, headers)),
-                    Err(err) => Err(ApiError::ParsingError(
-                        format!("Error Parsing: {:?}, Body: {}", err, body).to_string(),
-                    )),
+                    Err(err) => Err(ApiError::ParsingError(format!(
+                        "Error Parsing: {:?}, Body: {}",
+                        err, body
+                    ))),
                 }
             }
             Err(_) => Err(ApiError::RequestError),
