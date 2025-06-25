@@ -62,3 +62,12 @@ pub mod websocket {
 
 pub mod versions;
 pub use versions::*;
+
+pub mod location;
+pub use location::*;
+
+pub mod npc;
+pub use npc::*;
+
+pub mod mission;
+pub use mission::*;
