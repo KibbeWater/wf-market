@@ -36,6 +36,9 @@ impl<State: Clone + 'static> Client<State> {
                     self_arc: OnceLock::new(),
                     token: self.token.clone(),
                     device_id: self.device_id.clone(),
+                    platform: self.platform,
+                    language: self.language,
+                    crossplay: self.crossplay,
                     order_route: self.order_route.clone(),
                     user_route: self.user_route.clone(),
                     authentication_route: self.authentication_route.clone(),
@@ -55,16 +58,35 @@ impl<State: Clone + 'static> Client<State> {
         headers: Option<HashMap<String, String>>,
     ) -> Result<(T, HeaderMap), ApiError> {
         let url = version.as_str().to_owned() + path;
-        let mut builder = self.http.request(method, &url);
+        let mut headers = reqwest::header::HeaderMap::new();
+
+        // Add the required headers
+        headers.insert("language", self.language.as_str().parse().unwrap());
+        headers.insert("platform", self.platform.as_str().parse().unwrap());
+        headers.insert("crossplay", self.crossplay.to_string().parse().unwrap());
+        
+        // If the client is authenticated, add the token to the headers
+        if self.token != "" {
+            headers.insert(reqwest::header::AUTHORIZATION, format!("Bearer {}", self.token));
+        }
+
+        // Add any additional headers provided
+       if let Some(hards) = headers {
+            for (key, value) in hards.iter() {
+                headers.insert(key.parse().unwrap(), value.parse().unwrap());
+            }
+        }
+
+        // Create the HTTP client with the headers
+        let http_client =reqwest::Client::builder()
+        .default_headers(headers)
+        .build()
+        .unwrap();
+
+        let mut builder = http_client.request(method, &url);
         // If the client needs a body, serialize it
         if let Some(b) = body {
             builder = builder.json(&b);
-        }
-        // If the client has headers, add them to the builder
-        if let Some(hards) = headers {
-            for (key, value) in hards.iter() {
-                builder = builder.header(key, value.as_str());
-            }
         }
 
         self.limiter.until_ready().await;
@@ -152,6 +174,9 @@ pub struct Client<State = Unauthenticated> {
     self_arc: OnceLock<Arc<Client<State>>>,
     token: String,
     device_id: String,
+    language: Language,
+    platform: Platform,
+    crossplay: bool,
     limiter: Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>,
     order_route: OnceLock<Arc<OrderRoute<State>>>,
     user_route: OnceLock<Arc<UserRoute<State>>>,
@@ -166,6 +191,9 @@ impl Client<Unauthenticated> {
             self_arc: OnceLock::new(),
             token: String::new(),
             device_id: String::new(),
+            language: Language::default(),
+            platform: Platform::default(),
+            crossplay: true,
             order_route: OnceLock::new(),
             user_route: OnceLock::new(),
             authentication_route: OnceLock::new(),
@@ -194,6 +222,9 @@ impl Client<Unauthenticated> {
             self_arc: OnceLock::new(),
             token,
             device_id: device_id.to_string(),
+            platform: self.platform,
+            language: self.language,
+            crossplay: self.crossplay,
             order_route: OnceLock::new(),
             user_route: OnceLock::new(),
             authentication_route: OnceLock::new(),
