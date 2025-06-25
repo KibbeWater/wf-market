@@ -149,7 +149,39 @@ impl<State: Clone + 'static> Client<State> {
             Err(_) => Err(ApiError::RequestError),
         }
     }
-
+    /**
+    Set the language for the client
+    # Arguments
+    - `language`: The language to set for the client, defaults to English if not set
+    # Returns
+    The client with the language set
+    */
+    pub fn with_language(mut self, language: Language) -> Self {
+        self.language = language;
+        self
+    }
+    /**
+    Set the platform for the client
+    # Arguments
+    - `platform`: The platform to set for the client, defaults to PC if not set
+    # Returns
+    The client with the platform set
+    */
+    pub fn with_platform(mut self, platform: Platform) -> Self {
+        self.platform = platform;
+        self
+    }
+    /**
+    Set the crossplay setting for the client
+    # Arguments
+    - `crossplay`: Whether to enable crossplay or not, defaults to true if not
+    # Returns
+    The client with the crossplay setting set
+    */
+    pub fn with_crossplay(mut self, crossplay: bool) -> Self {
+        self.crossplay = crossplay;
+        self
+    }
     // Endpoint methods to access routes
     pub fn order(&self) -> Arc<OrderRoute<State>> {
         self.order_route
