@@ -13,12 +13,14 @@ async fn locations() {
     let locations = client.manifest().locations().await.unwrap();
     println!("Locations: {:?}", locations.len());
 }
+
 #[tokio::test]
 async fn npcs() {
     let client = Client::new();
     let npcs = client.manifest().npcs().await.unwrap();
     println!("NPCs: {:?}", npcs.len());
 }
+
 #[tokio::test]
 async fn missions() {
     let client = Client::new();
