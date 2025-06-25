@@ -1,4 +1,4 @@
-use crate::{endpoints::*, enums::*, errors::*, utils::*};
+use crate::{endpoints::*, enums::*, errors::*, types::websocket::WsClientBuilder, utils::*};
 use governor::{
     RateLimiter,
     clock::DefaultClock,
@@ -301,6 +301,15 @@ impl Client<Authenticated> {
     pub fn get_token(&self) -> String {
         // Only accessible on authed clients, if this panics we got hit by a cosmic particle
         self.token.clone()
+    }
+    /**
+    Create a WebSocket builder
+
+    # Returns
+    A WsClient Builder
+    */
+    pub fn create_websocket(&self) -> WsClientBuilder {
+        WsClientBuilder::new(self.get_token(), self.get_device_id())
     }
     /**
     Returns the clients device id

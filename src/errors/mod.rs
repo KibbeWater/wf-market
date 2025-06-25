@@ -6,5 +6,5 @@ pub mod auth;
 pub use auth::*;
 pub mod response;
 pub use response::*;
-pub mod ws;
-pub use ws::*;
+pub mod ws_error;
+pub use ws_error::*;
