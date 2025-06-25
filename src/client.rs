@@ -8,13 +8,12 @@ use reqwest::{
     Method,
     header::{HeaderMap, HeaderName, HeaderValue},
 };
-use serde::Serialize;
 use serde_json::Value;
 use std::{
     collections::HashMap,
     marker::PhantomData,
     num::{NonZero, NonZeroU32},
-    sync::{Arc, Mutex, OnceLock, Weak},
+    sync::{Arc, OnceLock},
 };
 
 const REQUESTS_PER_SECOND: NonZeroU32 = NonZero::new(3).unwrap();
