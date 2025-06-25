@@ -1,6 +1,11 @@
 use std::sync::{Arc, Weak};
 
-use crate::client::{Client, IsUnauthenticated};
+use crate::{
+    client::{Client, IsAuthenticated},
+    enums::*,
+    errors::*,
+    types::*,
+};
 
 #[derive(Debug)]
 pub struct UserRoute<State> {
@@ -17,7 +22,58 @@ impl<State> UserRoute<State> {
             client: Arc::downgrade(&client),
         })
     }
+    /**
+     * Fetches the a user by their slug.
+    * # Returns
+     * - `Ok(User)` if the user was found
+     * - `Err(ApiError)` if there was an error fetching the user
+     */
+    pub async fn get_by_slug(&self, slug: &str) -> Result<User, ApiError> {
+        let client = self.client.upgrade().expect("Client should not be dropped");
 
+        match client
+            .as_ref()
+            .call_api::<ApiResultV2<User>>(
+                ApiVersion::V2,
+                Method::GET,
+                &format!("/user/{}", slug),
+                None,
+                None,
+            )
+            .await
+        {
+            Ok((user, _headers)) => Ok(user.data),
+            Err(e) => {
+                return Err(e);
+            }
+        }
+    }
+    /**
+     * Fetches the a user by their user ID.
+     * # Returns
+     * - `Ok(User)` if the user was found
+     * - `Err(ApiError)` if there was an error fetching the user
+     */
+    pub async fn get_by_id(&self, user_id: &str) -> Result<User, ApiError> {
+        let client = self.client.upgrade().expect("Client should not be dropped");
+
+        match client
+            .as_ref()
+            .call_api::<ApiResultV2<User>>(
+                ApiVersion::V2,
+                Method::GET,
+                &format!("/userId/{}", user_id),
+                None,
+                None,
+            )
+            .await
+        {
+            Ok((user, _headers)) => Ok(user.data),
+            Err(e) => {
+                return Err(e);
+            }
+        }
+    }
     /**
      * Creates a new `UserRoute` from an existing one, sharing the client.
      * This is useful for cloning routes when the client state changes.
