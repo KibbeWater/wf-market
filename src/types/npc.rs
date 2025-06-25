@@ -7,8 +7,8 @@ pub struct Npc {
     pub slug: String,
     #[serde(rename = "gameRef")]
     pub game_ref: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub i18n: Option<HashMap<String, NpcTranslation>>,
+    #[serde(default)]
+    pub i18n: HashMap<String, NpcTranslation>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

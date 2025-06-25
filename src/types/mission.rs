@@ -7,15 +7,15 @@ pub struct Mission {
     pub slug: String,
     #[serde(rename = "gameRef")]
     pub game_ref: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub i18n: Option<HashMap<String, MissionTranslation>>,
+    #[serde(default)]
+    pub i18n: HashMap<String, MissionTranslation>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct MissionTranslation {
     pub name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub icon: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub thumb: Option<String>,
+    #[serde(default)]
+    pub icon: String,
+    #[serde(default)]
+    pub thumb: String,
 }

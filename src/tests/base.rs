@@ -1,13 +1,5 @@
-use crate::{
-    client::{Authenticated, Client},
-    enums::*,
-    errors::AuthError,
-    types::{CreateOrderParams, TopOrdersFilters, UpdateOrderParams},
-};
-use dotenv::dotenv;
-use std::env;
+use crate::client::Client;
 
-// Can Run on any Client
 #[tokio::test]
 async fn versions() {
     let client = Client::new();
