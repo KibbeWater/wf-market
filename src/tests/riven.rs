@@ -10,11 +10,7 @@ async fn all_rivens() {
 #[tokio::test]
 async fn get_riven_by_slug() {
     let client = Client::new();
-    let items = client
-        .riven()
-        .get_riven_by_slug("kulstar")
-        .await
-        .unwrap();
+    let items = client.riven().get_riven_by_slug("kulstar").await.unwrap();
     println!("Riven: {:?}", items);
 }
 
