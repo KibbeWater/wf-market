@@ -37,6 +37,7 @@ NOTE: Not reusing the device_id may generate multiple devices on a user's device
 */
 
 pub mod client;
+pub use client::*;
 pub mod endpoints;
 pub mod enums;
 pub mod errors;
