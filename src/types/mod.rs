@@ -98,3 +98,9 @@ pub use sister_quirk::*;
 
 pub mod sister_weapon;
 pub use sister_weapon::*;
+
+pub mod chat;
+pub use chat::*;
+
+pub mod chat_message;
+pub use chat_message::*;

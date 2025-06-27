@@ -46,6 +46,8 @@ pub struct Client<State = Unauthenticated> {
     order_route: OnceLock<Arc<OrderRoute<State>>>,
     user_route: OnceLock<Arc<UserRoute<State>>>,
     authentication_route: OnceLock<Arc<AuthenticationRoute<State>>>,
+    // V1 Routes
+    chat_route: OnceLock<Arc<ChatRoute<State>>>,
     _state: PhantomData<State>,
 }
 impl<State: Clone + 'static> Client<State> {
@@ -67,6 +69,7 @@ impl<State: Clone + 'static> Client<State> {
                     order_route: self.order_route.clone(),
                     user_route: self.user_route.clone(),
                     authentication_route: self.authentication_route.clone(),
+                    chat_route: self.chat_route.clone(),
                     limiter: self.limiter.clone(),
                     _state: PhantomData,
                 })
@@ -85,6 +88,11 @@ impl<State: Clone + 'static> Client<State> {
         let url = version.as_str().to_owned() + path;
         let mut default_headers = reqwest::header::HeaderMap::new();
 
+        let prefix = match version {
+            ApiVersion::V1 => "JWT",
+            ApiVersion::V2 => "Bearer",
+        };
+
         // Add the required headers
         default_headers.insert("language", self.language.as_str().parse().unwrap());
         default_headers.insert("platform", self.platform.as_str().parse().unwrap());
@@ -94,7 +102,7 @@ impl<State: Clone + 'static> Client<State> {
         if self.token != "" {
             default_headers.insert(
                 reqwest::header::AUTHORIZATION,
-                format!("Bearer {}", self.token).parse().unwrap(),
+                format!("{} {}", prefix, self.token).parse().unwrap(),
             );
         }
 
@@ -259,6 +267,11 @@ impl<State: Clone + 'static> Client<State> {
             .get_or_init(|| RivenRoute::new(self.arc()))
             .clone()
     }
+    pub fn chat(&self) -> Arc<ChatRoute<State>> {
+        self.chat_route
+            .get_or_init(|| ChatRoute::new(self.arc()))
+            .clone()
+    }
 }
 
 impl Client<Unauthenticated> {
@@ -278,6 +291,7 @@ impl Client<Unauthenticated> {
             order_route: OnceLock::new(),
             user_route: OnceLock::new(),
             authentication_route: OnceLock::new(),
+            chat_route: OnceLock::new(),
             limiter: build_limiter(REQUESTS_PER_SECOND).into(),
             _state: PhantomData,
         }
@@ -321,6 +335,7 @@ impl Client<Unauthenticated> {
             order_route: OnceLock::new(),
             user_route: OnceLock::new(),
             authentication_route: OnceLock::new(),
+            chat_route: OnceLock::new(),
             limiter: self.limiter.clone(),
             _state: PhantomData,
         };
@@ -370,7 +385,12 @@ impl Client<Unauthenticated> {
             arc.sister_route
                 .set(SisterRoute::from_existing(sister, arc.clone()))
                 .ok();
-        }        
+        }
+        if let Some(chat) = self.chat_route.get() {
+            arc.chat_route
+                .set(ChatRoute::from_existing(chat, arc.clone()))
+                .ok();
+        }
         // Return the new authenticated client
 
         Ok(Arc::try_unwrap(arc).unwrap_or_else(|arc| (*arc).clone()))
