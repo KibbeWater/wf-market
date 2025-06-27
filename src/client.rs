@@ -39,6 +39,9 @@ pub struct Client<State = Unauthenticated> {
     crossplay: bool,
     limiter: Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>,
     manifest_route: OnceLock<Arc<ManifestRoute<State>>>,
+    item_route: OnceLock<Arc<ItemRoute<State>>>,
+    lich_route: OnceLock<Arc<LichRoute<State>>>,
+    sister_route: OnceLock<Arc<SisterRoute<State>>>,
     order_route: OnceLock<Arc<OrderRoute<State>>>,
     user_route: OnceLock<Arc<UserRoute<State>>>,
     authentication_route: OnceLock<Arc<AuthenticationRoute<State>>>,
@@ -56,6 +59,9 @@ impl<State: Clone + 'static> Client<State> {
                     language: self.language,
                     crossplay: self.crossplay,
                     manifest_route: self.manifest_route.clone(),
+                    item_route: self.item_route.clone(),
+                    lich_route: self.lich_route.clone(),
+                    sister_route: self.sister_route.clone(),
                     order_route: self.order_route.clone(),
                     user_route: self.user_route.clone(),
                     authentication_route: self.authentication_route.clone(),
@@ -231,6 +237,21 @@ impl<State: Clone + 'static> Client<State> {
             .get_or_init(|| AuthenticationRoute::new(self.arc()))
             .clone()
     }
+    pub fn lich(&self) -> Arc<LichRoute<State>> {
+        self.lich_route
+            .get_or_init(|| LichRoute::new(self.arc()))
+            .clone()
+    }
+    pub fn sister(&self) -> Arc<SisterRoute<State>> {
+        self.sister_route
+            .get_or_init(|| SisterRoute::new(self.arc()))
+            .clone()
+    }
+    pub fn items(&self) -> Arc<ItemRoute<State>> {
+        self.item_route
+            .get_or_init(|| ItemRoute::new(self.arc()))
+            .clone()
+    }
 }
 
 impl Client<Unauthenticated> {
@@ -243,6 +264,9 @@ impl Client<Unauthenticated> {
             platform: Platform::default(),
             crossplay: true,
             manifest_route: OnceLock::new(),
+            item_route: OnceLock::new(),
+            lich_route: OnceLock::new(),
+            sister_route: OnceLock::new(),
             order_route: OnceLock::new(),
             user_route: OnceLock::new(),
             authentication_route: OnceLock::new(),
@@ -282,6 +306,9 @@ impl Client<Unauthenticated> {
             language: self.language,
             crossplay: self.crossplay,
             manifest_route: OnceLock::new(),
+            item_route: OnceLock::new(),
+            lich_route: OnceLock::new(),
+            sister_route: OnceLock::new(),
             order_route: OnceLock::new(),
             user_route: OnceLock::new(),
             authentication_route: OnceLock::new(),
@@ -313,6 +340,11 @@ impl Client<Unauthenticated> {
         if let Some(auth) = self.authentication_route.get() {
             arc.authentication_route
                 .set(AuthenticationRoute::from_existing(auth, arc.clone()))
+                .ok();
+        }
+        if let Some(item) = self.item_route.get() {
+            arc.item_route
+                .set(ItemRoute::from_existing(item, arc.clone()))
                 .ok();
         }
         // Return the new authenticated client

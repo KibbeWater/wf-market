@@ -72,11 +72,14 @@ pub use npc::*;
 pub mod mission;
 pub use mission::*;
 
+pub mod item;
+pub use item::*;
+
 pub mod lich_ephemera;
 pub use lich_ephemera::*;
 
-pub mod lich_quir;
-pub use lich_quir::*;
+pub mod lich_quirk;
+pub use lich_quirk::*;
 
 pub mod lich_weapon;
 pub use lich_weapon::*;
