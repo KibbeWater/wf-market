@@ -110,4 +110,143 @@ where
             }
         }
     }
+    /**
+     * Leaves a chat with the given chat ID.
+     * # Arguments
+     * - `chat_id`: A string slice that holds the ID of the chat to leave.
+     * # Returns
+     * - `Ok(String)` containing the chat ID if successful.
+     * - `Err(ApiError)` if the API call fails or if the response cannot be parsed.
+     */
+    pub async fn leave_chat(&self, chat_id: &str) -> Result<String, ApiError> {
+        let client = self.client.upgrade().expect("Client should not be dropped");
+
+        match client
+            .as_ref()
+            .call_api::<ApiResultV1<Value>>(
+                ApiVersion::V1,
+                Method::DELETE,
+                &format!("/im/chats/{}", chat_id),
+                None,
+                None,
+            )
+            .await
+        {
+            Ok((data, _headers)) => {
+                let id = data.payload.get("chat_id").ok_or_else(|| {
+                    ApiError::ParsingError("Missing 'chat_id' field in response".to_string())
+                })?;
+                let id_str = id
+                    .as_str()
+                    .ok_or_else(|| ApiError::ParsingError("Chat ID is not a string".to_string()))?;
+                Ok(id_str.to_string())
+            }
+            Err(e) => {
+                return Err(e);
+            }
+        }
+    }
+    /**
+     * Fetches a list of users that are ignored in the chat.
+     * # Returns
+     * - `Ok(Vec<UserShort>)` containing the list of ignored users if successful.
+     * - `Err(ApiError)` if the API call fails or if the response cannot be parsed.
+     */
+    pub async fn ignore_users(&self) -> Result<Vec<UserShort>, ApiError> {
+        let client = self.client.upgrade().expect("Client should not be dropped");
+
+        match client
+            .as_ref()
+            .call_api::<ApiResultV1<Vec<UserShort>>>(
+                ApiVersion::V1,
+                Method::GET,
+                "/im/ignore",
+                None,
+                None,
+            )
+            .await
+        {
+            Ok((data, _headers)) => Ok(data.payload),
+            Err(e) => {
+                return Err(e);
+            }
+        }
+    }
+    /**
+     * Adds a user to the ignore list for a specific chat.
+     * # Arguments
+     * - `chat_id`: A string slice that holds the ID of the chat.
+     * - `user_id`: A string slice that holds the ID of the user to ignore.
+     * # Returns
+     * - `Ok(UserShort)` containing the ignored user data if successful.
+     * - `Err(ApiError)` if the API call fails or if the response cannot be parsed.
+     */
+    pub async fn ignore_user(&self, chat_id: &str, user_id: &str) -> Result<UserShort, ApiError> {
+        let client = self.client.upgrade().expect("Client should not be dropped");
+
+        match client
+            .as_ref()
+            .call_api::<ApiResultV1<Value>>(
+                ApiVersion::V1,
+                Method::POST,
+                "/im/ignore",
+                Some(serde_json::json!({
+                    "chat_id": chat_id,
+                    "user_id": user_id,
+                })),
+                None,
+            )
+            .await
+        {
+            Ok((data, _headers)) => {
+                let user_value = data.payload.get("user").ok_or_else(|| {
+                    ApiError::ParsingError("Missing 'user' field in response".to_string())
+                })?;
+                let user =
+                    serde_json::from_value::<UserShort>(user_value.clone()).map_err(|e| {
+                        ApiError::ParsingError(format!("Failed to parse chats user data: {}", e))
+                    })?;
+                Ok(user)
+            }
+            Err(e) => {
+                return Err(e);
+            }
+        }
+    }
+    /**
+     * Removes a user from the ignore list.
+     * # Arguments
+     * - `user_id`: A string slice that holds the ID of the user to remove from the ignore list.
+     * # Returns
+     * - `Ok(String)` containing the user ID if successful.
+     * - `Err(ApiError)` if the API call fails or if the response cannot be parsed.
+     */
+    pub async fn ignore_user_remove(&self, user_id: &str) -> Result<String, ApiError> {
+        let client = self.client.upgrade().expect("Client should not be dropped");
+
+        match client
+            .as_ref()
+            .call_api::<ApiResultV1<Value>>(
+                ApiVersion::V1,
+                Method::DELETE,
+                &format!("/im/ignore/{}", user_id),
+                None,
+                None,
+            )
+            .await
+        {
+            Ok((data, _headers)) => {
+                let id = data.payload.get("user_id").ok_or_else(|| {
+                    ApiError::ParsingError("Missing 'user' field in response".to_string())
+                })?;
+                let id_str = id
+                    .as_str()
+                    .ok_or_else(|| ApiError::ParsingError("User ID is not a string".to_string()))?;
+                Ok(id_str.to_string())
+            }
+            Err(e) => {
+                return Err(e);
+            }
+        }
+    }
 }
