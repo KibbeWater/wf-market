@@ -1,5 +1,6 @@
 mod base;
 mod chat;
+mod client;
 pub mod item;
 mod lich;
 mod order;
