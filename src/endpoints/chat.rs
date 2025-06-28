@@ -39,6 +39,12 @@ impl<State> ChatRoute<State>
 where
     State: IsAuthenticated + Clone + 'static,
 {
+    /**
+     * Fetches the a list of chats from the API.
+     * # Returns
+     * - `Ok(Vec<Chat>)` containing the list of chats if successful.
+     * - `Err(ApiError)` if the API call fails or if the response cannot be parsed.
+     */
     pub async fn get_chats(&self) -> Result<Vec<Chat>, ApiError> {
         let client = self.client.upgrade().expect("Client should not be dropped");
 
@@ -64,6 +70,14 @@ where
             }
         }
     }
+    /**
+     * Fetches the a list of chat messages for a specific chat.
+     * * # Arguments
+     * - `chat_id`: A string slice that holds the ID of the chat for which
+     * # Returns
+     * - `Ok(Vec<ChatMessage>)` containing the list of chats if successful.
+     * - `Err(ApiError)` if the cache is empty.
+     */
     pub async fn get_chat_messages(&self, chat_id: &str) -> Result<Vec<ChatMessage>, ApiError> {
         let client = self.client.upgrade().expect("Client should not be dropped");
 
