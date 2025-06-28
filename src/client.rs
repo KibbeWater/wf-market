@@ -398,6 +398,32 @@ impl Client<Unauthenticated> {
 }
 
 impl Client<Authenticated> {
+    pub fn new_authenticated(token: &str, device_id: &str) -> Self {
+        // This constructor is only for internal use, it assumes the client is authenticated
+        // If this panics, we got hit by a cosmic particle
+        assert!(!token.is_empty(), "Token cannot be empty");
+        assert!(!device_id.is_empty(), "Device ID cannot be empty");
+        Self {
+            self_arc: OnceLock::new(),
+            token: token.to_string(),
+            device_id: device_id.to_string(),
+            platform: Platform::default(),
+            language: Language::default(),
+            crossplay: true,
+            manifest_route: OnceLock::new(),
+            item_route: OnceLock::new(),
+            riven_route: OnceLock::new(),
+            lich_route: OnceLock::new(),
+            sister_route: OnceLock::new(),
+            order_route: OnceLock::new(),
+            user_route: OnceLock::new(),
+            authentication_route: OnceLock::new(),
+            chat_route: OnceLock::new(),
+            limiter: build_limiter(REQUESTS_PER_SECOND).into(),
+            _state: PhantomData,
+        }
+    }
+
     /**
     Return the authentication token
 
