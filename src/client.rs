@@ -85,7 +85,7 @@ impl<State: Clone + 'static> Client<State> {
         body: Option<Value>,
         headers: Option<HashMap<String, String>>,
     ) -> Result<(T, HeaderMap), ApiError> {
-        let url = version.as_str().to_owned() + path;
+        let url = version.api_url().to_owned() + path;
         let mut default_headers = reqwest::header::HeaderMap::new();
 
         let prefix = match version {
@@ -440,8 +440,8 @@ impl Client<Authenticated> {
     # Returns
     A WsClient Builder
     */
-    pub fn create_websocket(&self) -> WsClientBuilder {
-        WsClientBuilder::new(self.get_token(), self.get_device_id())
+    pub fn create_websocket(&self, version: ApiVersion) -> WsClientBuilder {
+        WsClientBuilder::new(version, self.get_token(), self.get_device_id())
     }
     /**
     Returns the clients device id

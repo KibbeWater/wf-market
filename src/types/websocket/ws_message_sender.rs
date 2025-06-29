@@ -1,10 +1,11 @@
 use tokio::sync::mpsc;
 
-use crate::{errors::WsError, types::websocket::WsMessage};
+use crate::{enums::*, errors::WsError, types::websocket::WsMessage};
 
 // Message sender handle that can be cloned and passed to callbacks
 #[derive(Clone)]
 pub struct MessageSender {
+    pub version: ApiVersion,
     pub tx: mpsc::UnboundedSender<WsMessage>,
 }
 
@@ -22,23 +23,15 @@ impl MessageSender {
         payload: serde_json::Value,
         ref_id: &str,
     ) -> Result<(), WsError> {
-        let message = WsMessage {
-            route: route.to_string(),
-            payload: Some(payload),
-            id: Some(uuid::Uuid::new_v4().to_string()),
-            ref_id: Some(ref_id.to_string()),
-        };
+        let message = WsMessage::new(route, Some(payload), self.version.clone())
+            .with_id(&uuid::Uuid::new_v4().to_string())
+            .with_ref_id(ref_id);
         self.send_message(message)
     }
 
     pub fn send_request(&self, route: &str, payload: serde_json::Value) -> Result<String, WsError> {
         let id = uuid::Uuid::new_v4().to_string();
-        let message = WsMessage {
-            route: route.to_string(),
-            payload: Some(payload),
-            id: Some(id.clone()),
-            ref_id: None,
-        };
+        let message = WsMessage::new(route, Some(payload), self.version.clone()).with_id(&id);
         self.send_message(message)?;
         Ok(id)
     }

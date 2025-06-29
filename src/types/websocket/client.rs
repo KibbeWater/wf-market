@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use crate::{errors::WsError, types::websocket::*};
+use crate::{enums::ApiVersion, errors::WsError, types::websocket::*};
 
 // The actual WebSocket client (runtime instance)
 pub struct WsClient {
@@ -18,18 +18,21 @@ impl WsClient {
     pub(crate) fn send_connect_message(
         router: &Router,
         sender: &MessageSender,
+        version: ApiVersion,
     ) -> Result<(), WsError> {
-        let message = WsMessage::connect();
+        let message = WsMessage::connect(version);
         router.route_message(&message, sender)
     }
     pub(crate) fn handle_text_message(
         router: &Router,
         text: &str,
         sender: &MessageSender,
+        version: ApiVersion,
     ) -> Result<(), WsError> {
         let message: WsMessage = serde_json::from_str(text)
             .map_err(|_| WsError::InvalidMessageReceived(text.to_string()))?;
-        router.route_message(&message, sender)
+
+        router.route_message(&message.set_version(version), sender)
     }
 
     // Public methods for sending messages (only available after build)

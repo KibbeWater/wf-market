@@ -10,6 +10,12 @@ pub struct Route {
 
 impl Route {
     pub fn parse(route_str: &str) -> Result<Self, WsError> {
+        let mut route_str = route_str.to_string();
+        // Handle if the v1 request is in the old format
+        if route_str.contains("@WS") {
+            route_str = route_str.replace("@WS/", "@wfm|");
+        }
+
         if let Some(pipe_pos) = route_str.find('|') {
             let protocol = route_str[..pipe_pos].to_string();
             let path_and_param = &route_str[pipe_pos + 1..];

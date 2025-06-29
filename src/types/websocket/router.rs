@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{errors::WsError, types::websocket::*};
+use crate::{enums::ApiVersion, errors::WsError, types::websocket::*};
 
 // Updated callback type to include sender and route info
 pub type MessageCallback =
@@ -102,12 +102,12 @@ impl Router {
                                 parameter: None,
                             };
                             connected_callback(
-                                &WsMessage {
-                                    route: "@internal|internal/auth_connected".to_string(),
-                                    payload: Some(serde_json::Value::from(true)),
-                                    id: Some("INTERNAL".to_string()),
-                                    ref_id: None,
-                                },
+                                &WsMessage::new(
+                                    "@internal|internal/auth_connected",
+                                    Some(serde_json::Value::from(true)),
+                                    ApiVersion::default(),
+                                )
+                                .with_id("INTERNAL"),
                                 &route,
                                 &sender,
                             )?;
