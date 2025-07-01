@@ -1,4 +1,10 @@
-use crate::{endpoints::*, enums::*, errors::*, types::websocket::WsClientBuilder, utils::*};
+use crate::{
+    endpoints::*,
+    enums::*,
+    errors::*,
+    types::{UserPrivate, websocket::WsClientBuilder},
+    utils::*,
+};
 use governor::{
     RateLimiter,
     clock::DefaultClock,
@@ -38,6 +44,7 @@ pub struct Client<State = Unauthenticated> {
     platform: Platform,
     crossplay: bool,
     limiter: Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>,
+    // Routes
     manifest_route: OnceLock<Arc<ManifestRoute<State>>>,
     item_route: OnceLock<Arc<ItemRoute<State>>>,
     riven_route: OnceLock<Arc<RivenRoute<State>>>,
@@ -48,6 +55,7 @@ pub struct Client<State = Unauthenticated> {
     authentication_route: OnceLock<Arc<AuthenticationRoute<State>>>,
     // V1 Routes
     chat_route: OnceLock<Arc<ChatRoute<State>>>,
+    auction_route: OnceLock<Arc<AuctionRoute<State>>>,
     _state: PhantomData<State>,
 }
 impl<State: Clone + 'static> Client<State> {
@@ -70,6 +78,7 @@ impl<State: Clone + 'static> Client<State> {
                     user_route: self.user_route.clone(),
                     authentication_route: self.authentication_route.clone(),
                     chat_route: self.chat_route.clone(),
+                    auction_route: self.auction_route.clone(),
                     limiter: self.limiter.clone(),
                     _state: PhantomData,
                 })
@@ -97,6 +106,17 @@ impl<State: Clone + 'static> Client<State> {
         default_headers.insert("language", self.language.as_str().parse().unwrap());
         default_headers.insert("platform", self.platform.as_str().parse().unwrap());
         default_headers.insert("crossplay", self.crossplay.to_string().parse().unwrap());
+        default_headers.insert(
+            "User-Agent",
+            format!(
+                "wf-market-rs/{} ({}; {})",
+                env!("CARGO_PKG_VERSION"),
+                self.platform.as_str(),
+                self.language.as_str()
+            )
+            .parse()
+            .unwrap(),
+        );
 
         // If the client is authenticated, add the token to the headers
         if self.token != "" {
@@ -125,9 +145,9 @@ impl<State: Clone + 'static> Client<State> {
         let mut builder = http_client.request(method, &url);
         // If the client needs a body, serialize it
         if let Some(b) = body {
+            println!("Payload: {:?}", b);
             builder = builder.json(&b);
         }
-
         self.limiter.until_ready().await;
 
         match builder.send().await {
@@ -272,6 +292,11 @@ impl<State: Clone + 'static> Client<State> {
             .get_or_init(|| ChatRoute::new(self.arc()))
             .clone()
     }
+    pub fn auction(&self) -> Arc<AuctionRoute<State>> {
+        self.auction_route
+            .get_or_init(|| AuctionRoute::new(self.arc()))
+            .clone()
+    }
 }
 
 impl Client<Unauthenticated> {
@@ -292,6 +317,7 @@ impl Client<Unauthenticated> {
             user_route: OnceLock::new(),
             authentication_route: OnceLock::new(),
             chat_route: OnceLock::new(),
+            auction_route: OnceLock::new(),
             limiter: build_limiter(REQUESTS_PER_SECOND).into(),
             _state: PhantomData,
         }
@@ -336,6 +362,7 @@ impl Client<Unauthenticated> {
             user_route: OnceLock::new(),
             authentication_route: OnceLock::new(),
             chat_route: OnceLock::new(),
+            auction_route: OnceLock::new(),
             limiter: self.limiter.clone(),
             _state: PhantomData,
         };
@@ -345,6 +372,16 @@ impl Client<Unauthenticated> {
         // Set the self_arc inside the client to point to this Arc
         arc.self_arc.set(arc.clone()).unwrap();
 
+        // Refresh the internal data
+        match arc.refresh().await {
+            Ok(_) => {}
+            Err(e) => {
+                return Err(AuthError::Unknown(format!(
+                    "Failed to refresh user data: {:?}",
+                    e
+                )));
+            }
+        }
         // Copy routes if they were initialized
         if let Some(manifest) = self.manifest_route.get() {
             arc.manifest_route
@@ -391,6 +428,11 @@ impl Client<Unauthenticated> {
                 .set(ChatRoute::from_existing(chat, arc.clone()))
                 .ok();
         }
+        if let Some(auction) = self.auction_route.get() {
+            arc.auction_route
+                .set(AuctionRoute::from_existing(auction, arc.clone()))
+                .ok();
+        }
         // Return the new authenticated client
 
         Ok(Arc::try_unwrap(arc).unwrap_or_else(|arc| (*arc).clone()))
@@ -403,7 +445,7 @@ impl Client<Authenticated> {
         // If this panics, we got hit by a cosmic particle
         assert!(!token.is_empty(), "Token cannot be empty");
         assert!(!device_id.is_empty(), "Device ID cannot be empty");
-        Self {
+        let client = Client::<Authenticated> {
             self_arc: OnceLock::new(),
             token: token.to_string(),
             device_id: device_id.to_string(),
@@ -419,11 +461,26 @@ impl Client<Authenticated> {
             user_route: OnceLock::new(),
             authentication_route: OnceLock::new(),
             chat_route: OnceLock::new(),
+            auction_route: OnceLock::new(),
             limiter: build_limiter(REQUESTS_PER_SECOND).into(),
             _state: PhantomData,
+        };
+        client
+    }
+    /**
+     * Returns the current user data
+     * # Returns
+     * If the user data is successfully fetched.
+     */
+    pub fn get_user(&self) -> Result<UserPrivate, ApiError> {
+        match self.user().get_user() {
+            Ok(user) => Ok(user),
+            Err(e) => Err(ApiError::Unknown(format!(
+                "Failed to get user data: {:?}",
+                e
+            ))),
         }
     }
-
     /**
     Return the authentication token
 
@@ -452,5 +509,23 @@ impl Client<Authenticated> {
     pub fn get_device_id(&self) -> String {
         // Again, panics, cosmic particle, you get the gist of it now
         self.device_id.clone()
+    }
+
+    /**
+    Returns the current internal data
+    # Returns
+    If the data is successfully refreshed.
+    */
+    pub async fn refresh(&self) -> Result<String, ApiError> {
+        match self.user().me().await {
+            Ok(_) => {}
+            Err(e) => {
+                return Err(ApiError::Unknown(format!(
+                    "Failed to refresh user data: {:?}",
+                    e
+                )));
+            }
+        }
+        Ok("Successfully refreshed user data".to_string())
     }
 }
