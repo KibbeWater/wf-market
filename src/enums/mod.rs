@@ -18,3 +18,9 @@ pub use tier::*;
 
 pub mod roles;
 pub use roles::*;
+
+pub mod polarity;
+pub use polarity::*;
+
+pub mod auction_type;
+pub use auction_type::*;

@@ -9,4 +9,5 @@ pub enum ApiError {
     Forbidden,
     WFMError(ResponseError),
     Unknown(String),
+    InvalidType { expected: String, found: String },
 }

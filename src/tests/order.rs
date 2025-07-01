@@ -67,6 +67,7 @@ async fn get_by_id() {
 async fn my_orders() {
     let client = setup_client().await.unwrap();
 
+    println!("User: {:?}", client.get_user().unwrap());
     let orders = client.order().my_orders().await.unwrap();
     println!("My Orders: {:?}", orders);
 }

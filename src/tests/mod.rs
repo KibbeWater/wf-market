@@ -1,3 +1,4 @@
+mod auction;
 mod base;
 mod chat;
 mod client;

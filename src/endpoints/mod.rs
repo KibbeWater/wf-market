@@ -24,3 +24,6 @@ pub use sister::*;
 
 pub mod chat;
 pub use chat::*;
+
+pub mod auction;
+pub use auction::*;
