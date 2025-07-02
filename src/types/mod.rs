@@ -113,3 +113,6 @@ pub use auction_filter::*;
 
 pub mod create_auction;
 pub use create_auction::*;
+
+pub mod update_auction;
+pub use update_auction::*;

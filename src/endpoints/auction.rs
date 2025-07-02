@@ -168,4 +168,71 @@ where
             }
         }
     }
+    pub async fn update(&self, auction_id: &str, args: UpdateAuctionParams) -> Result<Auction, ApiError> {
+        let client = self.client.upgrade().expect("Client should not be dropped");
+        match client
+            .as_ref()
+            .call_api::<ApiResultV1<Value>>(
+                ApiVersion::V1,
+                Method::PUT,
+                format!("/auctions/entry/{}", auction_id).as_str(),
+                Some(json!(args)),
+                None,
+            )
+            .await
+        {
+            Ok((data, _headers)) => {
+                 let value = data.payload.get("auction").ok_or_else(|| {
+                    ApiError::ParsingError("Missing 'auction' field in response".to_string())
+                })?;
+                let auction = serde_json::from_value::<Auction>(value.clone()).map_err(|e| {
+                    ApiError::ParsingError(format!("Failed to parse auction data: {}", e))
+                })?;
+                let mut cache = self.auctions_cache.lock().unwrap();
+                if let Some(index) = cache
+                    .iter()
+                    .position(|o| o.id == auction.id)
+                {
+                    cache[index] = auction.clone();
+                } else {
+                    cache.push(auction.clone());
+                }
+                return Ok(auction);
+            }
+            Err(e) => {
+                return Err(e);
+            }
+        }
+        
+    }
+
+    pub async fn delete(&self, order_id: &str) -> Result<String, ApiError> {
+    let client = self.client.upgrade().expect("Client should not be dropped");
+
+    match client
+        .as_ref()
+        .call_api::<ApiResultV1<Order>>(
+            ApiVersion::V1,
+            Method::DELETE,
+            format!("/order/{}", order_id).as_str(),
+            None,
+            None,
+        )
+        .await
+    {
+        Ok((data, _headers)) => {
+            let id = data.payload.get("auction_id").ok_or_else(|| {
+                ApiError::ParsingError("Missing 'auction_id' field in response".to_string())
+            })?;
+            let id_str = id
+                .as_str()
+                .ok_or_else(|| ApiError::ParsingError("Auction ID is not a string".to_string()))?;
+            let mut cache = self.auctions_cache.lock().unwrap();
+            cache.retain(|o| o.id != order.data.id);
+            return Ok(id_str.to_string())
+        }
+        Err(e) => {
+            return Err(e);
+        }
+    }
 }

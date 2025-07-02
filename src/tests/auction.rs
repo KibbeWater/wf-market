@@ -99,7 +99,50 @@ async fn create_riven() {
     let auction = client.auction().create(riven).await.unwrap();
     println!("New Auction Created: {:?}", auction);
 }
+#[tokio::test]
+async fn create_lich() {
+    let client = setup_client().await.unwrap();
 
+    let lich = CreateAuctionParams::new(
+        10,
+        None, // Buyout price
+        0,
+        true,
+        "asd",
+        CreateAuctionItem::new_lich(
+            "kuva_hek",
+            "pyromaniac",
+            "magnetic",
+            true, // having_ephemera
+            33,   // damage
+        ),
+    );
+
+    let auction = client.auction().create(lich).await.unwrap();
+    println!("New Auction Created: {:?}", auction);
+}
+#[tokio::test]
+async fn create_sister() {
+    let client = setup_client().await.unwrap();
+
+    let sister = CreateAuctionParams::new(
+        10,
+        None, // Buyout price
+        0,
+        true,
+        "asd",
+        CreateAuctionItem::new_sister(
+            "tenet_arca_plasmor",
+            "bloodhound",
+            "impact",
+            true, // having_ephemera
+            33,   // damage
+        ),
+    );
+
+    let auction = client.auction().create(sister).await.unwrap();
+    println!("New Auction Created: {:?}", auction);
+}
 // Create a new auction Riven
 // {"starting_price":4,"buyout_price":4,"minimal_reputation":0,"visible":true,"note":"TEST","item":{"weapon_url_name":"cortege","name":"Ampido","type":"riven","attributes":[{"url_name":"ammo_maximum","positive":true,"value":5},{"url_name":"cold_damage","positive":true,"value":5},{"url_name":"critical_chance","positive":false,"value":-55}],"mastery_level":8,"mod_rank":5,"re_rolls":5,"polarity":"vazarin"}}
 
