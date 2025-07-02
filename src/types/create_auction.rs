@@ -1,7 +1,7 @@
 use serde::Serialize;
 
 use crate::{
-    enums::{AuctionType, OrderType, Polarity},
+    enums::{AuctionType, Polarity},
     types::ItemAttribute,
 };
 

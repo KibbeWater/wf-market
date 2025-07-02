@@ -1,10 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    enums::{AuctionType, Polarity},
-    errors::ApiError,
-    types::UserShort,
-};
+use crate::{enums::AuctionType, types::UserShort};
 
 #[derive(Deserialize, Clone, Debug, Default)]
 pub struct Auction {

@@ -27,7 +27,11 @@ impl<State: Clone + 'static> AuctionRoute<State> {
             client: Arc::downgrade(&client),
         })
     }
-
+    /**
+     * Returns the most recent auctions.
+     * This method fetches the latest auctions from the server and caches them.
+     * - Returns a `Result` containing a vector of `AuctionWithOwner` on success.
+     */
     pub async fn get_recent_auctions(&self) -> Result<Vec<AuctionWithOwner>, ApiError> {
         let client = self.client.upgrade().expect("Client should not be dropped");
 
@@ -51,6 +55,12 @@ impl<State: Clone + 'static> AuctionRoute<State> {
             }
         }
     }
+    /**
+     * Searches for auctions based on the provided filter.
+     * This method allows filtering auctions by various criteria such as item type, polarity, etc.
+     * - `filter`: The [`AuctionFilter`] to apply when searching for auctions.
+     * - Returns a `Result` containing a vector of `AuctionWithOwner` on success.
+     */
     pub async fn search_auctions(
         &self,
         filter: AuctionFilter,
@@ -103,6 +113,11 @@ impl<State> AuctionRoute<State>
 where
     State: IsAuthenticated + Clone + 'static,
 {
+    /**
+     * Returns the cached auctions.
+     * This method retrieves the cached auctions from the route.
+     * - Returns a `Result` containing a vector of `Auction` on success.
+     */
     pub async fn my_auctions(&self) -> Result<Vec<Auction>, ApiError> {
         let client = self.client.upgrade().expect("Client should not be dropped");
 
@@ -135,6 +150,12 @@ where
             }
         }
     }
+    /**
+     * Creates a new auction.
+     * This method allows creating a new auction with the specified parameters.
+     * - `args`: The [`CreateAuctionParams`] containing the details of the auction to create.
+     * - Returns a `Result` containing the created `Auction` on success.
+     */
     pub async fn create(&self, args: CreateAuctionParams) -> Result<Auction, ApiError> {
         let client = self.client.upgrade().expect("Client should not be dropped");
         match client
@@ -165,6 +186,13 @@ where
             }
         }
     }
+    /**
+     * Updates an existing auction.
+     * This method allows updating the details of an existing auction.
+     * - `auction_id`: The ID of the auction to update.
+     * - `args`: The [`UpdateAuctionParams`] containing the updated details of the auction.
+     * - Returns a `Result` containing the updated `Auction` on success.
+     */
     pub async fn update(
         &self,
         auction_id: &str,
@@ -203,6 +231,12 @@ where
         }
     }
 
+    /**
+     * Deletes an auction by its ID.
+     * This method allows closing an auction, removing it from the cache.
+     * - `order_id`: The ID of the auction to close.
+     * - Returns a `Result` containing the auction ID on success.
+     */
     pub async fn delete(&self, order_id: &str) -> Result<String, ApiError> {
         let client = self.client.upgrade().expect("Client should not be dropped");
 

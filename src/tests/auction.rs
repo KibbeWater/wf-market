@@ -2,8 +2,7 @@ use crate::{
     Authenticated, Client,
     errors::AuthError,
     types::{
-        AuctionFilter, AuctionItem, CreateAuctionItem, CreateAuctionParams, ItemAttribute, Riven,
-        UpdateAuctionParams,
+        AuctionFilter, CreateAuctionItem, CreateAuctionParams, ItemAttribute, UpdateAuctionParams,
     },
 };
 use dotenv::dotenv;

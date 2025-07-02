@@ -1,7 +1,5 @@
 use serde::Deserialize;
 
-use crate::types::UserPrivate;
-
 // TODO: Use for Api version 1
 #[derive(Deserialize)]
 pub struct SigninResponse {
