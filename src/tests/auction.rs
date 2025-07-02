@@ -3,6 +3,7 @@ use crate::{
     errors::AuthError,
     types::{
         AuctionFilter, AuctionItem, CreateAuctionItem, CreateAuctionParams, ItemAttribute, Riven,
+        UpdateAuctionParams,
     },
 };
 use dotenv::dotenv;
@@ -99,6 +100,7 @@ async fn create_riven() {
     let auction = client.auction().create(riven).await.unwrap();
     println!("New Auction Created: {:?}", auction);
 }
+
 #[tokio::test]
 async fn create_lich() {
     let client = setup_client().await.unwrap();
@@ -121,6 +123,7 @@ async fn create_lich() {
     let auction = client.auction().create(lich).await.unwrap();
     println!("New Auction Created: {:?}", auction);
 }
+
 #[tokio::test]
 async fn create_sister() {
     let client = setup_client().await.unwrap();
@@ -143,11 +146,29 @@ async fn create_sister() {
     let auction = client.auction().create(sister).await.unwrap();
     println!("New Auction Created: {:?}", auction);
 }
-// Create a new auction Riven
-// {"starting_price":4,"buyout_price":4,"minimal_reputation":0,"visible":true,"note":"TEST","item":{"weapon_url_name":"cortege","name":"Ampido","type":"riven","attributes":[{"url_name":"ammo_maximum","positive":true,"value":5},{"url_name":"cold_damage","positive":true,"value":5},{"url_name":"critical_chance","positive":false,"value":-55}],"mastery_level":8,"mod_rank":5,"re_rolls":5,"polarity":"vazarin"}}
 
-// Create a new auction Lich
-// {"starting_price":12,"buyout_price":null,"minimal_reputation":0,"visible":true,"note":"TEST","item":{"weapon_url_name":"kuva_hek","type":"lich","quirk":"pyromaniac","damage":33,"having_ephemera":true,"element":"magnetic"}}
+#[tokio::test]
+async fn close_auction() {
+    let id = "685b24e313559c82fc63b7d9"; // Auction ID to close
+    let client = setup_client().await.unwrap();
+    let data = client.auction().delete(id).await.unwrap();
+    println!("Close order response: {:?}", data);
+}
 
-// Create a new auction Sister
-// {"starting_price":1,"buyout_price":1,"minimal_reputation":0,"visible":true,"note":"TEST","item":{"weapon_url_name":"tenet_arca_plasmor","type":"sister","quirk":"bloodhound","damage":59,"having_ephemera":true,"element":"impact"}}
+#[tokio::test]
+async fn update_auction() {
+    let id = "686587c999a6b60043a39046"; // Auction ID to update
+    let client = setup_client().await.unwrap();
+
+    let order = client
+        .auction()
+        .update(
+            id,
+            UpdateAuctionParams::new()
+                .with_buyout_price(Some(100))
+                .with_starting_price(100),
+        )
+        .await
+        .unwrap();
+    println!("Auction Updated: {:?}", order);
+}

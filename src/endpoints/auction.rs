@@ -12,7 +12,7 @@ use crate::{
 
 #[derive(Debug)]
 pub struct AuctionRoute<State> {
-    auctions_cache: Mutex<Option<Vec<Auction>>>,
+    auctions_cache: Mutex<Vec<Auction>>,
     client: Weak<Client<State>>,
 }
 
@@ -23,7 +23,7 @@ impl<State: Clone + 'static> AuctionRoute<State> {
      */
     pub fn new(client: Arc<Client<State>>) -> Arc<Self> {
         Arc::new(Self {
-            auctions_cache: Mutex::new(None),
+            auctions_cache: Mutex::new(Vec::new()),
             client: Arc::downgrade(&client),
         })
     }
@@ -127,7 +127,7 @@ where
                         ApiError::ParsingError(format!("Failed to parse auctions data: {}", e))
                     })?;
                 let mut cache = self.auctions_cache.lock().unwrap();
-                *cache = Some(auctions.clone()); // Cache the auctions
+                *cache = auctions.clone(); // Cache the auctions
                 Ok(auctions)
             }
             Err(e) => {
@@ -155,12 +155,9 @@ where
                 let auction = serde_json::from_value::<Auction>(value.clone()).map_err(|e| {
                     ApiError::ParsingError(format!("Failed to parse auction data: {}", e))
                 })?;
+
                 let mut cache = self.auctions_cache.lock().unwrap();
-                if let Some(ref mut auctions) = *cache {
-                    auctions.push(auction.clone()); // Cache the new auction
-                } else {
-                    *cache = Some(vec![auction.clone()]); // Initialize cache with the new auction
-                }
+                cache.push(auction.clone());
                 Ok(auction)
             }
             Err(e) => {
@@ -168,7 +165,11 @@ where
             }
         }
     }
-    pub async fn update(&self, auction_id: &str, args: UpdateAuctionParams) -> Result<Auction, ApiError> {
+    pub async fn update(
+        &self,
+        auction_id: &str,
+        args: UpdateAuctionParams,
+    ) -> Result<Auction, ApiError> {
         let client = self.client.upgrade().expect("Client should not be dropped");
         match client
             .as_ref()
@@ -182,17 +183,14 @@ where
             .await
         {
             Ok((data, _headers)) => {
-                 let value = data.payload.get("auction").ok_or_else(|| {
+                let value = data.payload.get("auction").ok_or_else(|| {
                     ApiError::ParsingError("Missing 'auction' field in response".to_string())
                 })?;
                 let auction = serde_json::from_value::<Auction>(value.clone()).map_err(|e| {
                     ApiError::ParsingError(format!("Failed to parse auction data: {}", e))
                 })?;
                 let mut cache = self.auctions_cache.lock().unwrap();
-                if let Some(index) = cache
-                    .iter()
-                    .position(|o| o.id == auction.id)
-                {
+                if let Some(index) = cache.iter().position(|o| o.id == auction.id) {
                     cache[index] = auction.clone();
                 } else {
                     cache.push(auction.clone());
@@ -203,36 +201,36 @@ where
                 return Err(e);
             }
         }
-        
     }
 
     pub async fn delete(&self, order_id: &str) -> Result<String, ApiError> {
-    let client = self.client.upgrade().expect("Client should not be dropped");
+        let client = self.client.upgrade().expect("Client should not be dropped");
 
-    match client
-        .as_ref()
-        .call_api::<ApiResultV1<Order>>(
-            ApiVersion::V1,
-            Method::DELETE,
-            format!("/order/{}", order_id).as_str(),
-            None,
-            None,
-        )
-        .await
-    {
-        Ok((data, _headers)) => {
-            let id = data.payload.get("auction_id").ok_or_else(|| {
-                ApiError::ParsingError("Missing 'auction_id' field in response".to_string())
-            })?;
-            let id_str = id
-                .as_str()
-                .ok_or_else(|| ApiError::ParsingError("Auction ID is not a string".to_string()))?;
-            let mut cache = self.auctions_cache.lock().unwrap();
-            cache.retain(|o| o.id != order.data.id);
-            return Ok(id_str.to_string())
-        }
-        Err(e) => {
-            return Err(e);
+        match client
+            .as_ref()
+            .call_api::<ApiResultV1<Value>>(
+                ApiVersion::V1,
+                Method::PUT,
+                format!("/auctions/entry/{}/close", order_id).as_str(),
+                None,
+                None,
+            )
+            .await
+        {
+            Ok((data, _headers)) => {
+                let id = data.payload.get("auction_id").ok_or_else(|| {
+                    ApiError::ParsingError("Missing 'auction_id' field in response".to_string())
+                })?;
+                let id_str = id.as_str().ok_or_else(|| {
+                    ApiError::ParsingError("Auction ID is not a string".to_string())
+                })?;
+                let mut cache = self.auctions_cache.lock().unwrap();
+                cache.retain(|o| o.id != id_str);
+                return Ok(id_str.to_string());
+            }
+            Err(e) => {
+                return Err(e);
+            }
         }
     }
 }

@@ -1,7 +1,6 @@
 use serde::Serialize;
 
 #[derive(Serialize, Default)]
-#[serde(rename_all = "camelCase")]
 pub struct UpdateAuctionParams {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub buyout_price: Option<u32>,
@@ -20,8 +19,8 @@ impl UpdateAuctionParams {
         UpdateAuctionParams::default()
     }
 
-    pub fn with_buyout_price(mut self, buyout_price: u32) -> Self {
-        self.buyout_price = Some(buyout_price);
+    pub fn with_buyout_price(mut self, buyout_price: Option<u32>) -> Self {
+        self.buyout_price = buyout_price;
         self
     }
     pub fn with_minimal_reputation(mut self, minimal_reputation: u32) -> Self {
