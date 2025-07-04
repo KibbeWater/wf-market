@@ -1,3 +1,4 @@
+mod achievement;
 mod auction;
 mod base;
 mod chat;

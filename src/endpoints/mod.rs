@@ -27,3 +27,6 @@ pub use chat::*;
 
 pub mod auction;
 pub use auction::*;
+
+pub mod achievement;
+pub use achievement::*;

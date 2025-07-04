@@ -52,6 +52,7 @@ pub struct Client<State = Unauthenticated> {
     sister_route: OnceLock<Arc<SisterRoute<State>>>,
     order_route: OnceLock<Arc<OrderRoute<State>>>,
     user_route: OnceLock<Arc<UserRoute<State>>>,
+    achievement_route: OnceLock<Arc<AchievementRoute<State>>>,
     authentication_route: OnceLock<Arc<AuthenticationRoute<State>>>,
     // V1 Routes
     chat_route: OnceLock<Arc<ChatRoute<State>>>,
@@ -76,6 +77,7 @@ impl<State: Clone + 'static> Client<State> {
                     sister_route: self.sister_route.clone(),
                     order_route: self.order_route.clone(),
                     user_route: self.user_route.clone(),
+                    achievement_route: self.achievement_route.clone(),
                     authentication_route: self.authentication_route.clone(),
                     chat_route: self.chat_route.clone(),
                     auction_route: self.auction_route.clone(),
@@ -297,6 +299,11 @@ impl<State: Clone + 'static> Client<State> {
             .get_or_init(|| AuctionRoute::new(self.arc()))
             .clone()
     }
+    pub fn achievement(&self) -> Arc<AchievementRoute<State>> {
+        self.achievement_route
+            .get_or_init(|| AchievementRoute::new(self.arc()))
+            .clone()
+    }
 }
 
 impl Client<Unauthenticated> {
@@ -315,6 +322,7 @@ impl Client<Unauthenticated> {
             sister_route: OnceLock::new(),
             order_route: OnceLock::new(),
             user_route: OnceLock::new(),
+            achievement_route: OnceLock::new(),
             authentication_route: OnceLock::new(),
             chat_route: OnceLock::new(),
             auction_route: OnceLock::new(),
@@ -360,6 +368,7 @@ impl Client<Unauthenticated> {
             sister_route: OnceLock::new(),
             order_route: OnceLock::new(),
             user_route: OnceLock::new(),
+            achievement_route: OnceLock::new(),
             authentication_route: OnceLock::new(),
             chat_route: OnceLock::new(),
             auction_route: OnceLock::new(),
@@ -433,6 +442,11 @@ impl Client<Unauthenticated> {
                 .set(AuctionRoute::from_existing(auction, arc.clone()))
                 .ok();
         }
+        if let Some(achievement) = self.achievement_route.get() {
+            arc.achievement_route
+                .set(AchievementRoute::from_existing(achievement, arc.clone()))
+                .ok();
+        }
         // Return the new authenticated client
 
         Ok(Arc::try_unwrap(arc).unwrap_or_else(|arc| (*arc).clone()))
@@ -459,6 +473,7 @@ impl Client<Authenticated> {
             sister_route: OnceLock::new(),
             order_route: OnceLock::new(),
             user_route: OnceLock::new(),
+            achievement_route: OnceLock::new(),
             authentication_route: OnceLock::new(),
             chat_route: OnceLock::new(),
             auction_route: OnceLock::new(),
