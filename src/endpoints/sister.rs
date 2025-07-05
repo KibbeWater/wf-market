@@ -51,7 +51,7 @@ impl<State: Clone + 'static> SisterRoute<State> {
             )
             .await
         {
-            Ok((items, _headers)) => {
+            Ok((items, _, _)) => {
                 // Cache the items response
                 let mut cache = self.weapons_cache.lock().unwrap();
                 *cache = Some(items.data.clone());
@@ -82,7 +82,7 @@ impl<State: Clone + 'static> SisterRoute<State> {
             )
             .await
         {
-            Ok((user, _headers)) => Ok(user.data),
+            Ok((user, _, _)) => Ok(user.data),
             Err(e) => {
                 return Err(e);
             }
@@ -114,7 +114,7 @@ impl<State: Clone + 'static> SisterRoute<State> {
             )
             .await
         {
-            Ok((items, _headers)) => {
+            Ok((items, _, _)) => {
                 // Cache the items response
                 let mut cache = self.ephemeras_cache.lock().unwrap();
                 *cache = Some(items.data.clone());
@@ -151,7 +151,7 @@ impl<State: Clone + 'static> SisterRoute<State> {
             )
             .await
         {
-            Ok((items, _headers)) => {
+            Ok((items, _, _)) => {
                 // Cache the items response
                 let mut cache = self.quirks_cache.lock().unwrap();
                 *cache = Some(items.data.clone());

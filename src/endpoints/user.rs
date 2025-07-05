@@ -47,7 +47,7 @@ impl<State: Clone + 'static> UserRoute<State> {
             )
             .await
         {
-            Ok((user, _headers)) => Ok(user.data),
+            Ok((user, _, _)) => Ok(user.data),
             Err(e) => {
                 return Err(e);
             }
@@ -73,7 +73,7 @@ impl<State: Clone + 'static> UserRoute<State> {
             )
             .await
         {
-            Ok((user, _headers)) => Ok(user.data),
+            Ok((user, _, _)) => Ok(user.data),
             Err(e) => {
                 return Err(e);
             }
@@ -106,7 +106,9 @@ where
         let ca_orders = self.user.lock().unwrap();
         match &*ca_orders {
             Some(user) => Ok(user.clone()),
-            None => Err(ApiError::Unauthorized),
+            None => Err(ApiError::Unknown(
+                "User not found. Please call `me()` to fetch the user data.".to_string(),
+            )),
         }
     }
     /**
@@ -124,7 +126,7 @@ where
             .call_api::<ApiResultV2<UserPrivate>>(ApiVersion::V2, Method::GET, "/me", None, None)
             .await
         {
-            Ok((user, _headers)) => {
+            Ok((user, _, _)) => {
                 // Update the user in the route
                 let mut user_lock = self.user.lock().unwrap();
                 *user_lock = Some(user.data.clone());
@@ -160,7 +162,7 @@ where
             )
             .await
         {
-            Ok((user, _headers)) => Ok(user.data),
+            Ok((user, _, _)) => Ok(user.data),
             Err(e) => {
                 return Err(e);
             }

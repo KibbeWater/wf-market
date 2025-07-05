@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex, Weak};
 
 use reqwest::Method;
+use serde::de::Error;
 use serde_json::{Value, json};
 
 use crate::{
@@ -40,14 +41,15 @@ impl<State: Clone + 'static> AuctionRoute<State> {
             .call_api::<ApiResultV1<Value>>(ApiVersion::V1, Method::GET, "/auctions", None, None)
             .await
         {
-            Ok((data, _headers)) => {
+            Ok((data, _, err)) => {
                 let value = data.payload.get("auctions").ok_or_else(|| {
-                    ApiError::ParsingError("Missing 'auctions' field in response".to_string())
+                    ApiError::ParsingError(
+                        err.clone(),
+                        serde_json::Error::missing_field("auctions"),
+                    )
                 })?;
                 let auctions = serde_json::from_value::<Vec<AuctionWithOwner>>(value.clone())
-                    .map_err(|e| {
-                        ApiError::ParsingError(format!("Failed to parse auctions data: {}", e))
-                    })?;
+                    .map_err(|e| ApiError::ParsingError(err, e))?;
                 Ok(auctions)
             }
             Err(e) => {
@@ -67,8 +69,9 @@ impl<State: Clone + 'static> AuctionRoute<State> {
     ) -> Result<Vec<AuctionWithOwner>, ApiError> {
         let client = self.client.upgrade().expect("Client should not be dropped");
 
-        let query = serde_urlencoded::to_string(filter)
-            .map_err(|_| ApiError::ParsingError("Unable to serialize filters".to_string()))?;
+        let query = serde_urlencoded::to_string(filter).map_err(|e| {
+            ApiError::Unknown(format!("Failed to serialize auctions filter: {}", e))
+        })?;
 
         match client
             .as_ref()
@@ -81,14 +84,15 @@ impl<State: Clone + 'static> AuctionRoute<State> {
             )
             .await
         {
-            Ok((data, _headers)) => {
+            Ok((data, _, err)) => {
                 let value = data.payload.get("auctions").ok_or_else(|| {
-                    ApiError::ParsingError("Missing 'auctions' field in response".to_string())
+                    ApiError::ParsingError(
+                        err.clone(),
+                        serde_json::Error::missing_field("auctions"),
+                    )
                 })?;
                 let auctions = serde_json::from_value::<Vec<AuctionWithOwner>>(value.clone())
-                    .map_err(|e| {
-                        ApiError::ParsingError(format!("Failed to parse auctions data: {}", e))
-                    })?;
+                    .map_err(|e| ApiError::ParsingError(err, e))?;
                 Ok(auctions)
             }
             Err(e) => {
@@ -133,14 +137,15 @@ where
             )
             .await
         {
-            Ok((data, _headers)) => {
+            Ok((data, _, err)) => {
                 let value = data.payload.get("auctions").ok_or_else(|| {
-                    ApiError::ParsingError("Missing 'auctions' field in response".to_string())
+                    ApiError::ParsingError(
+                        err.clone(),
+                        serde_json::Error::missing_field("auctions"),
+                    )
                 })?;
-                let auctions =
-                    serde_json::from_value::<Vec<Auction>>(value.clone()).map_err(|e| {
-                        ApiError::ParsingError(format!("Failed to parse auctions data: {}", e))
-                    })?;
+                let auctions = serde_json::from_value::<Vec<Auction>>(value.clone())
+                    .map_err(|e| ApiError::ParsingError(err, e))?;
                 let mut cache = self.auctions_cache.lock().unwrap();
                 *cache = auctions.clone(); // Cache the auctions
                 Ok(auctions)
@@ -169,13 +174,12 @@ where
             )
             .await
         {
-            Ok((data, _headers)) => {
+            Ok((data, _, err)) => {
                 let value = data.payload.get("auction").ok_or_else(|| {
-                    ApiError::ParsingError("Missing 'auction' field in response".to_string())
+                    ApiError::ParsingError(err.clone(), serde_json::Error::missing_field("auction"))
                 })?;
-                let auction = serde_json::from_value::<Auction>(value.clone()).map_err(|e| {
-                    ApiError::ParsingError(format!("Failed to parse auction data: {}", e))
-                })?;
+                let auction = serde_json::from_value::<Auction>(value.clone())
+                    .map_err(|e| ApiError::ParsingError(err, e))?;
 
                 let mut cache = self.auctions_cache.lock().unwrap();
                 cache.push(auction.clone());
@@ -210,13 +214,12 @@ where
             )
             .await
         {
-            Ok((data, _headers)) => {
+            Ok((data, _, err)) => {
                 let value = data.payload.get("auction").ok_or_else(|| {
-                    ApiError::ParsingError("Missing 'auction' field in response".to_string())
+                    ApiError::ParsingError(err.clone(), serde_json::Error::missing_field("auction"))
                 })?;
-                let auction = serde_json::from_value::<Auction>(value.clone()).map_err(|e| {
-                    ApiError::ParsingError(format!("Failed to parse auction data: {}", e))
-                })?;
+                let auction = serde_json::from_value::<Auction>(value.clone())
+                    .map_err(|e| ApiError::ParsingError(err, e))?;
                 let mut cache = self.auctions_cache.lock().unwrap();
                 if let Some(index) = cache.iter().position(|o| o.id == auction.id) {
                     cache[index] = auction.clone();
@@ -251,12 +254,18 @@ where
             )
             .await
         {
-            Ok((data, _headers)) => {
+            Ok((data, _, err)) => {
                 let id = data.payload.get("auction_id").ok_or_else(|| {
-                    ApiError::ParsingError("Missing 'auction_id' field in response".to_string())
+                    ApiError::ParsingError(
+                        err.clone(),
+                        serde_json::Error::missing_field("auction_id"),
+                    )
                 })?;
                 let id_str = id.as_str().ok_or_else(|| {
-                    ApiError::ParsingError("Auction ID is not a string".to_string())
+                    ApiError::ParsingError(
+                        err.clone(),
+                        serde_json::Error::custom("Auction ID is not a string"),
+                    )
                 })?;
                 let mut cache = self.auctions_cache.lock().unwrap();
                 cache.retain(|o| o.id != id_str);

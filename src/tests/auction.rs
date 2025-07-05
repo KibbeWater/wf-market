@@ -1,13 +1,13 @@
 use crate::{
     Authenticated, Client,
-    errors::AuthError,
+    errors::ApiError,
     types::{
         AuctionFilter, CreateAuctionItem, CreateAuctionParams, ItemAttribute, UpdateAuctionParams,
     },
 };
 use dotenv::dotenv;
 use std::env;
-async fn setup_client() -> Result<Client<Authenticated>, AuthError> {
+async fn setup_client() -> Result<Client<Authenticated>, ApiError> {
     dotenv().ok();
 
     let user = env::var("TEST_USER").expect("TEST_USER must be set in .env for integration tests");
@@ -85,7 +85,7 @@ async fn create_riven() {
             "cortege",
             "Ampido",
             vec![
-                ItemAttribute::new("ammo_maximum", true, 5.0),
+                ItemAttribute::new("ammo_maximum", true, 5000.0),
                 ItemAttribute::new("cold_damage", true, 5.0),
                 ItemAttribute::new("critical_chance", false, -55.0),
             ],
@@ -137,8 +137,8 @@ async fn create_sister() {
             "tenet_arca_plasmor",
             "bloodhound",
             "impact",
-            true, // having_ephemera
-            33,   // damage
+            true,  // having_ephemera
+            11111, // damage
         ),
     );
 
@@ -156,7 +156,7 @@ async fn close_auction() {
 
 #[tokio::test]
 async fn update_auction() {
-    let id = "686587c999a6b60043a39046"; // Auction ID to update
+    let id = "686587c999a6b600s43a39046"; // Auction ID to update
     let client = setup_client().await.unwrap();
 
     let order = client

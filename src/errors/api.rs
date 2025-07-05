@@ -1,13 +1,17 @@
-use crate::errors::ResponseError;
+use serde_json::Error;
 
-#[derive(Debug, Eq, PartialEq)]
+use crate::errors::*;
+
+#[derive(Debug)]
 pub enum ApiError {
-    ParsingError(String),
-    RequestError,
-    Unauthorized,
-    NotFound(String),
-    Forbidden,
-    WFMError(ResponseError),
+    TooManyRequests(RequestError),
+    RequestError(RequestError),
+    Unauthorized(RequestError),
+    ParsingError(RequestError, Error),
+    NotFound(RequestError),
+    BadRequest(RequestError),
+    InvalidCredentials(RequestError),
+    Forbidden(RequestError),
     Unknown(String),
     InvalidType { expected: String, found: String },
 }

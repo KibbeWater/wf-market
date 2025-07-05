@@ -1,13 +1,13 @@
 use crate::{
     client::{Authenticated, Client},
     enums::*,
-    errors::AuthError,
+    errors::ApiError,
     types::{CreateOrderParams, TopOrdersFilters, UpdateOrderParams},
 };
 use dotenv::dotenv;
 use std::env;
 
-async fn setup_client() -> Result<Client<Authenticated>, AuthError> {
+async fn setup_client() -> Result<Client<Authenticated>, ApiError> {
     dotenv().ok();
 
     let user = env::var("TEST_USER").expect("TEST_USER must be set in .env for integration tests");
@@ -24,33 +24,88 @@ async fn setup_client() -> Result<Client<Authenticated>, AuthError> {
 #[tokio::test]
 async fn recent() {
     let client = Client::new();
-    let recent = client.order().recent().await.unwrap();
-    println!("Recent Orders: {:?}", recent.len());
+
+    match client.order().recent().await {
+        Ok(recent) => {
+            println!(
+                "✅ Successfully fetched recent orders: {} total",
+                recent.len()
+            );
+            if !recent.is_empty() {
+                println!(
+                    "   First order: {} - {} platinum",
+                    recent[0].order.id, recent[0].order.platinum
+                );
+            }
+        }
+        Err(e) => {
+            eprintln!("💥 Failed to fetch recent orders: {:?}", e);
+            assert!(false, "Failed to fetch recent orders: {:?}", e);
+        }
+    }
 }
 
 #[tokio::test]
 async fn get_orders_by_item() {
     let client = Client::new();
     let slug = "primed_target_cracker"; // Item slug to fetch orders for
-    let orders = client.order().get_orders_by_item(slug).await.unwrap();
-    println!("Orders for {}: {:?}", slug, orders.len());
+
+    match client.order().get_orders_by_item(slug).await {
+        Ok(orders) => {
+            println!(
+                "✅ Successfully fetched orders for '{}': {} total",
+                slug,
+                orders.len()
+            );
+            if !orders.is_empty() {
+                println!(
+                    "   Sample order: {} - {} platinum ({})",
+                    orders[0].order.id, orders[0].order.platinum, orders[0].user.name
+                );
+            }
+        }
+        Err(e) => {
+            eprintln!("💥 Failed to fetch orders for '{}': {:?}", slug, e);
+            assert!(false, "Failed to fetch orders for '{}': {:?}", slug, e);
+        }
+    }
 }
 
 #[tokio::test]
 async fn get_top_orders_by_item() {
     let client = Client::new();
     let slug = "primed_target_cracker"; // Item slug to fetch orders for
-    let orders = client
+
+    match client
         .order()
         .get_top_orders_by_item(slug, Some(TopOrdersFilters::new()))
         .await
-        .unwrap();
-    println!(
-        "Top Orders for {}: Buy: {:?}, Sell: {:?}",
-        slug,
-        orders.buy.len(),
-        orders.sell.len()
-    );
+    {
+        Ok(orders) => {
+            println!(
+                "✅ Successfully fetched top orders for '{}': Buy: {}, Sell: {}",
+                slug,
+                orders.buy.len(),
+                orders.sell.len()
+            );
+            if !orders.buy.is_empty() {
+                println!(
+                    "   Lowest buy price: {} platinum",
+                    orders.buy[0].order.platinum
+                );
+            }
+            if !orders.sell.is_empty() {
+                println!(
+                    "   Highest sell price: {} platinum",
+                    orders.sell[0].order.platinum
+                );
+            }
+        }
+        Err(e) => {
+            eprintln!("💥 Failed to fetch top orders for '{}': {:?}", slug, e);
+            assert!(false, "Failed to fetch top orders for '{}': {:?}", slug, e);
+        }
+    }
 }
 
 #[tokio::test]
@@ -58,61 +113,183 @@ async fn get_by_id() {
     let id = "6859657e57605a002b649eee"; // Order ID to fetch
     let client = Client::new();
 
-    let order = client.order().get_by_id(id).await.unwrap();
-    println!("Order: {:?}", order);
+    match client.order().get_by_id(id).await {
+        Ok(order) => {
+            println!("✅ Successfully fetched order: {}", order.order.id);
+            println!("   Type: {:?}", order.order.order_type);
+            println!("   Price: {} platinum", order.order.platinum);
+            println!("   Quantity: {}", order.order.quantity);
+            println!("   User: {}", order.user.name);
+            println!("   User Status: {:?}", order.user.status);
+            println!("   Visible: {}", order.order.visible);
+        }
+        Err(e) => match e {
+            ApiError::NotFound(_) => {
+                println!("❌ Order with ID '{}' not found", id);
+                // Don't panic in tests, just assert
+                assert!(false, "Order not found");
+            }
+            ApiError::ParsingError(req_err, parse_err) => {
+                eprintln!("📝 Parsing error: {:?} - {}", req_err, parse_err);
+                assert!(false, "Parsing error: {}", parse_err);
+            }
+            _ => {
+                eprintln!("💥 Unexpected error: {:?}", e);
+                assert!(false, "Unexpected error: {:?}", e);
+            }
+        },
+    }
 }
 
 // Can Only Run on Authenticated Client
 #[tokio::test]
 async fn my_orders() {
-    let client = setup_client().await.unwrap();
+    match setup_client().await {
+        Ok(client) => {
+            println!(
+                "✅ Successfully authenticated as: {:?}",
+                client.get_user().unwrap().ingame_name
+            );
 
-    println!("User: {:?}", client.get_user().unwrap());
-    let orders = client.order().my_orders().await.unwrap();
-    println!("My Orders: {:?}", orders);
+            match client.order().my_orders().await {
+                Ok(orders) => {
+                    println!("✅ Successfully fetched my orders: {} total", orders.len());
+                    for (i, order) in orders.iter().take(3).enumerate() {
+                        println!(
+                            "   Order {}: {} - {} platinum ({:?})",
+                            i + 1,
+                            order.id,
+                            order.platinum,
+                            order.order_type
+                        );
+                    }
+                }
+                Err(e) => {
+                    eprintln!("💥 Failed to fetch my orders: {:?}", e);
+                    assert!(false, "Failed to fetch my orders: {:?}", e);
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("🔐 Authentication failed: {:?}", e);
+            assert!(false, "Authentication failed: {:?}", e);
+        }
+    }
 }
 
 #[tokio::test]
 async fn update_order() {
     let id = "685b118413559c82fc63b7d8"; // Order ID to update
-    let client = setup_client().await.unwrap();
 
-    let order = client
-        .order()
-        .update(id, UpdateOrderParams::new().with_platinum(999))
-        .await
-        .unwrap();
-    println!("Order Updated: {:?}", order);
-    println!("Orders: {:?}", client.order().orders());
+    match setup_client().await {
+        Ok(client) => {
+            match client
+                .order()
+                .update(id, UpdateOrderParams::new().with_platinum(999))
+                .await
+            {
+                Ok(order) => {
+                    println!("✅ Successfully updated order: {}", order.id);
+                    println!("   New price: {} platinum", order.platinum);
+                    println!("   Cached orders: {}", client.order().orders().len());
+                }
+                Err(e) => {
+                    eprintln!("💥 Failed to update order '{}': {:?}", id, e);
+                    assert!(false, "Failed to update order: {:?}", e);
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("🔐 Authentication failed: {:?}", e);
+            assert!(false, "Authentication failed: {:?}", e);
+        }
+    }
 }
 
 #[tokio::test]
 async fn create_regular_order() {
     let id = "54aae292e7798909064f1575"; // Secura Dual Cestra Item ID
-    let client = setup_client().await.unwrap();
 
-    let new_order = client
-        .order()
-        .create(CreateOrderParams::new(id, OrderType::Buy, 10, 1, true))
-        .await
-        .unwrap();
-    println!("New Order Created: {:?}", new_order);
+    match setup_client().await {
+        Ok(client) => {
+            match client
+                .order()
+                .create(CreateOrderParams::new(id, OrderType::Buy, 10, 1, true))
+                .await
+            {
+                Ok(new_order) => {
+                    println!("✅ Successfully created new order: {}", new_order.id);
+                    println!("   Item ID: {}", id);
+                    println!("   Type: {:?}", new_order.order_type);
+                    println!("   Price: {} platinum", new_order.platinum);
+                    println!("   Quantity: {}", new_order.quantity);
+                }
+                Err(e) => {
+                    eprintln!("💥 Failed to create order: {:?}", e);
+                    assert!(false, "Failed to create order: {:?}", e);
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("🔐 Authentication failed: {:?}", e);
+            assert!(false, "Authentication failed: {:?}", e);
+        }
+    }
 }
 
 #[tokio::test]
 async fn close_order() {
     let id = "685b24e313559c82fc63b7d9"; // Order ID to close
-    let client = setup_client().await.unwrap();
-    client.order().my_orders().await.unwrap();
-    let rep = client.order().close(id, 2).await.unwrap();
-    println!("Close order response: {:?}", rep);
-    println!("Orders: {:?}", client.order().orders());
+
+    match setup_client().await {
+        Ok(client) => {
+            // First fetch orders to ensure we have them cached
+            match client.order().my_orders().await {
+                Ok(_) => match client.order().close(id, 2).await {
+                    Ok(response) => {
+                        println!("✅ Successfully closed order: {}", id);
+                        println!("   Response: {:?}", response);
+                        println!(
+                            "   Remaining cached orders: {}",
+                            client.order().orders().len()
+                        );
+                    }
+                    Err(e) => {
+                        eprintln!("💥 Failed to close order '{}': {:?}", id, e);
+                        assert!(false, "Failed to close order: {:?}", e);
+                    }
+                },
+                Err(e) => {
+                    eprintln!("💥 Failed to fetch orders before closing: {:?}", e);
+                    assert!(false, "Failed to fetch orders: {:?}", e);
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("🔐 Authentication failed: {:?}", e);
+            assert!(false, "Authentication failed: {:?}", e);
+        }
+    }
 }
 
 #[tokio::test]
 async fn delete_order() {
     let id = "685b24fb914e45bf7792c7b9"; // Order ID to delete
-    let client = setup_client().await.unwrap();
-    let rep = client.order().delete(id).await.unwrap();
-    println!("Delete order response: {:?}", rep);
+
+    match setup_client().await {
+        Ok(client) => match client.order().delete(id).await {
+            Ok(response) => {
+                println!("✅ Successfully deleted order: {}", id);
+                println!("   Response: {:?}", response);
+            }
+            Err(e) => {
+                eprintln!("💥 Failed to delete order '{}': {:?}", id, e);
+                assert!(false, "Failed to delete order: {:?}", e);
+            }
+        },
+        Err(e) => {
+            eprintln!("🔐 Authentication failed: {:?}", e);
+            assert!(false, "Authentication failed: {:?}", e);
+        }
+    }
 }

@@ -1,7 +1,7 @@
-use crate::{Authenticated, Client, errors::AuthError};
+use crate::{Authenticated, Client, errors::ApiError};
 use dotenv::dotenv;
 use std::env;
-async fn setup_client() -> Result<Client<Authenticated>, AuthError> {
+async fn setup_client() -> Result<Client<Authenticated>, ApiError> {
     dotenv().ok();
 
     let user = env::var("TEST_USER").expect("TEST_USER must be set in .env for integration tests");
@@ -22,7 +22,7 @@ async fn get_chats() {
 
 #[tokio::test]
 async fn get_chat_messages() {
-    let chat_id = "65be253bb0360b0139b65222"; // Replace with a valid chat ID
+    let chat_id = "65be253abb0360b0139b65222"; // Replace with a valid chat ID
     let client = setup_client().await.unwrap();
     let items = client.chat().get_chat_messages(chat_id).await.unwrap();
     println!("Chat Messages: {:?}", items.first().unwrap().message);

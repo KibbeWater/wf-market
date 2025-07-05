@@ -4,12 +4,13 @@ use std::{
 };
 
 use reqwest::Method;
+use serde::de::Error;
 use serde_json::Value;
 
 use crate::{
     client::{Client, IsUnauthenticated},
     enums::ApiVersion,
-    errors::AuthError,
+    errors::ApiError,
     types::*,
 };
 
@@ -52,7 +53,7 @@ where
         username: &str,
         password: &str,
         device_id: &str,
-    ) -> Result<(SigninResponse, String), AuthError> {
+    ) -> Result<(SigninResponse, String), ApiError> {
         let client = self.client.upgrade().expect("Client should not be dropped");
 
         let mut map = HashMap::new();
@@ -75,37 +76,33 @@ where
             )
             .await
         {
-            Ok((login_response, headers)) => {
+            Ok((login_response, headers, err)) => {
                 // Get Payload from the response
                 let user_value = login_response.payload.get("user").ok_or_else(|| {
-                    AuthError::ParsingError("Missing 'user' field in response".to_string())
+                    ApiError::ParsingError(err.clone(), serde_json::Error::missing_field("user"))
                 })?;
-                let user =
-                    serde_json::from_value::<SigninResponse>(user_value.clone()).map_err(|e| {
-                        AuthError::ParsingError(format!("Failed to parse user data: {}", e))
-                    })?;
+                let user = serde_json::from_value::<SigninResponse>(user_value.clone())
+                    .map_err(|e| ApiError::ParsingError(err.clone(), e))?;
 
                 let token = match headers.get("Authorization") {
                     Some(auth) => {
                         let t: String = auth
                             .to_str()
-                            .map_err(|_| {
-                                AuthError::ParsingError("Invalid token format".to_string())
-                            })?
+                            .map_err(|_| ApiError::Forbidden(err.clone()))?
                             .to_string();
                         let jwt = &t[4..]; // Remove the "JWT " from the token.
                         jwt.to_string()
                     }
-                    None => return Err(AuthError::NoUser),
+                    None => return Err(ApiError::InvalidCredentials(err)),
                 };
 
                 Ok((user, token))
             }
-            Err(e) => {
-                // Handle error in login response
-                eprintln!("Login failed: {:?}", e);
-                return Err(AuthError::Unknown(format!("Login failed: {:?}", e)));
-            }
+            Err(e) => match e {
+                ApiError::BadRequest(err) => return Err(ApiError::InvalidCredentials(err)),
+                ApiError::RequestError(err) => return Err(ApiError::InvalidCredentials(err)),
+                _ => Err(e),
+            },
         }
     }
 }

@@ -46,7 +46,7 @@ impl<State: Clone + 'static> AchievementRoute<State> {
             )
             .await
         {
-            Ok((user, _headers)) => {
+            Ok((user, _, _)) => {
                 // Cache the versions response
                 let mut cache = self.achievement_cache.lock().unwrap();
                 *cache = Some(user.data.clone());
@@ -84,7 +84,7 @@ impl<State: Clone + 'static> AchievementRoute<State> {
             )
             .await
         {
-            Ok((user, _headers)) => Ok(user.data),
+            Ok((user, _, _)) => Ok(user.data),
             Err(e) => {
                 return Err(e);
             }
@@ -116,7 +116,7 @@ impl<State: Clone + 'static> AchievementRoute<State> {
             )
             .await
         {
-            Ok((user, _headers)) => Ok(user.data),
+            Ok((user, _, _)) => Ok(user.data),
             Err(e) => {
                 return Err(e);
             }

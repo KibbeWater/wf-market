@@ -52,7 +52,7 @@ impl<State: Clone + 'static> ManifestRoute<State> {
             )
             .await
         {
-            Ok((user, _headers)) => {
+            Ok((user, _, _)) => {
                 // Cache the versions response
                 let mut cache = self.versions_cache.lock().unwrap();
                 *cache = Some(user.data.clone());
@@ -88,7 +88,7 @@ impl<State: Clone + 'static> ManifestRoute<State> {
             )
             .await
         {
-            Ok((user, _headers)) => {
+            Ok((user, _, _)) => {
                 // Cache the versions response
                 let mut cache = self.locations_cache.lock().unwrap();
                 *cache = Some(user.data.clone());
@@ -118,7 +118,7 @@ impl<State: Clone + 'static> ManifestRoute<State> {
             .call_api::<ApiResultV2<Vec<Npc>>>(ApiVersion::V2, Method::GET, "/npcs", None, None)
             .await
         {
-            Ok((user, _headers)) => {
+            Ok((user, _, _)) => {
                 // Cache the versions response
                 let mut cache = self.npcs_cache.lock().unwrap();
                 *cache = Some(user.data.clone());
@@ -154,7 +154,7 @@ impl<State: Clone + 'static> ManifestRoute<State> {
             )
             .await
         {
-            Ok((user, _headers)) => {
+            Ok((user, _, _)) => {
                 // Cache the versions response
                 let mut cache = self.missions_cache.lock().unwrap();
                 *cache = Some(user.data.clone());

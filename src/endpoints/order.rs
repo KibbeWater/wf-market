@@ -50,7 +50,7 @@ impl<State: Clone + 'static> OrderRoute<State> {
             )
             .await
         {
-            Ok((orders, _headers)) => Ok(orders.data),
+            Ok((orders, _, _)) => Ok(orders.data),
             Err(e) => {
                 return Err(e);
             }
@@ -79,7 +79,7 @@ impl<State: Clone + 'static> OrderRoute<State> {
             )
             .await
         {
-            Ok((orders, _headers)) => Ok(orders.data),
+            Ok((orders, _, _)) => Ok(orders.data),
             Err(e) => {
                 return Err(e);
             }
@@ -106,7 +106,7 @@ impl<State: Clone + 'static> OrderRoute<State> {
             )
             .await
         {
-            Ok((orders, _headers)) => Ok(orders.data),
+            Ok((orders, _, _)) => Ok(orders.data),
             Err(e) => {
                 return Err(e);
             }
@@ -128,7 +128,7 @@ impl<State: Clone + 'static> OrderRoute<State> {
 
         let query: String = if let Some(filters) = filters.clone() {
             let params = serde_urlencoded::to_string(filters)
-                .map_err(|_| ApiError::ParsingError("Unable to serialize filters".to_string()))?;
+                .map_err(|_| ApiError::Unknown("Failed to serialize filters".to_string()))?;
             format!("?{}", params)
         } else {
             String::new()
@@ -145,7 +145,7 @@ impl<State: Clone + 'static> OrderRoute<State> {
             )
             .await
         {
-            Ok((orders, _headers)) => Ok(orders.data),
+            Ok((orders, _, _)) => Ok(orders.data),
             Err(e) => {
                 return Err(e);
             }
@@ -191,7 +191,7 @@ where
             )
             .await
         {
-            Ok((orders, _headers)) => {
+            Ok((orders, _, _)) => {
                 let mut ca_orders = self.orders.lock().unwrap();
                 ca_orders.clear();
                 ca_orders.extend(orders.data.clone());
@@ -225,7 +225,7 @@ where
             )
             .await
         {
-            Ok((existing_order, _headers)) => {
+            Ok((existing_order, _, _)) => {
                 let mut ca_orders = self.orders.lock().unwrap();
                 if let Some(index) = ca_orders
                     .iter()
@@ -263,7 +263,7 @@ where
             )
             .await
         {
-            Ok((new_order, _headers)) => {
+            Ok((new_order, _, _)) => {
                 let mut ca_orders = self.orders.lock().unwrap();
                 ca_orders.push(new_order.data.clone());
                 return Ok(new_order.data);
@@ -301,7 +301,7 @@ where
             )
             .await
         {
-            Ok((transaction, _headers)) => {
+            Ok((transaction, _, _)) => {
                 let mut ca_orders = self.orders.lock().unwrap();
                 if let Some(index) = ca_orders.iter().position(|o| o.id == order_id) {
                     let current_quantity = ca_orders[index].quantity;
@@ -341,7 +341,7 @@ where
             )
             .await
         {
-            Ok((order, _headers)) => {
+            Ok((order, _, _)) => {
                 let mut ca_orders = self.orders.lock().unwrap();
                 ca_orders.retain(|o| o.id != order.data.id);
                 return Ok(order.data);

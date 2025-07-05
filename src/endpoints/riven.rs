@@ -49,7 +49,7 @@ impl<State: Clone + 'static> RivenRoute<State> {
             )
             .await
         {
-            Ok((items, _headers)) => {
+            Ok((items, _, _)) => {
                 // Cache the items response
                 let mut cache = self.rivens_cache.lock().unwrap();
                 *cache = Some(items.data.clone());
@@ -80,7 +80,7 @@ impl<State: Clone + 'static> RivenRoute<State> {
             )
             .await
         {
-            Ok((user, _headers)) => Ok(user.data),
+            Ok((user, _, _)) => Ok(user.data),
             Err(e) => {
                 return Err(e);
             }
@@ -112,7 +112,7 @@ impl<State: Clone + 'static> RivenRoute<State> {
             )
             .await
         {
-            Ok((items, _headers)) => {
+            Ok((items, _, _)) => {
                 // Cache the items response
                 let mut cache = self.attributes_cache.lock().unwrap();
                 *cache = Some(items.data.clone());

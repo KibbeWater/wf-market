@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex, Weak};
 
 use reqwest::Method;
+use serde::de::Error;
 use serde_json::Value;
 
 use crate::{IsAuthenticated, client::Client, enums::*, errors::*, types::*};
@@ -53,14 +54,12 @@ where
             .call_api::<ApiResultV1<Value>>(ApiVersion::V1, Method::GET, "/im/chats", None, None)
             .await
         {
-            Ok((data, _headers)) => {
+            Ok((data, _, err)) => {
                 let user_value = data.payload.get("chats").ok_or_else(|| {
-                    ApiError::ParsingError("Missing 'chats' field in response".to_string())
+                    ApiError::ParsingError(err.clone(), serde_json::Error::missing_field("chats"))
                 })?;
-                let chats =
-                    serde_json::from_value::<Vec<Chat>>(user_value.clone()).map_err(|e| {
-                        ApiError::ParsingError(format!("Failed to parse chats data: {}", e))
-                    })?;
+                let chats = serde_json::from_value::<Vec<Chat>>(user_value.clone())
+                    .map_err(|e| ApiError::ParsingError(err.clone(), e))?;
                 let mut ca_chats = self.chats_cache.lock().unwrap();
                 *ca_chats = Some(chats.clone());
                 Ok(chats)
@@ -92,17 +91,15 @@ where
             )
             .await
         {
-            Ok((data, _headers)) => {
+            Ok((data, _, err)) => {
                 let user_value = data.payload.get("messages").ok_or_else(|| {
-                    ApiError::ParsingError("Missing 'messages' field in response".to_string())
+                    ApiError::ParsingError(
+                        err.clone(),
+                        serde_json::Error::missing_field("messages"),
+                    )
                 })?;
                 let messages = serde_json::from_value::<Vec<ChatMessage>>(user_value.clone())
-                    .map_err(|e| {
-                        ApiError::ParsingError(format!(
-                            "Failed to parse chats messages data: {}",
-                            e
-                        ))
-                    })?;
+                    .map_err(|e| ApiError::ParsingError(err.clone(), e))?;
                 Ok(messages)
             }
             Err(e) => {
@@ -132,13 +129,16 @@ where
             )
             .await
         {
-            Ok((data, _headers)) => {
+            Ok((data, _, err)) => {
                 let id = data.payload.get("chat_id").ok_or_else(|| {
-                    ApiError::ParsingError("Missing 'chat_id' field in response".to_string())
+                    ApiError::ParsingError(err.clone(), serde_json::Error::missing_field("chat_id"))
                 })?;
-                let id_str = id
-                    .as_str()
-                    .ok_or_else(|| ApiError::ParsingError("Chat ID is not a string".to_string()))?;
+                let id_str = id.as_str().ok_or_else(|| {
+                    ApiError::ParsingError(
+                        err.clone(),
+                        serde_json::Error::custom("Chat ID is not a string"),
+                    )
+                })?;
                 Ok(id_str.to_string())
             }
             Err(e) => {
@@ -166,7 +166,7 @@ where
             )
             .await
         {
-            Ok((data, _headers)) => Ok(data.payload),
+            Ok((data, _, _)) => Ok(data.payload),
             Err(e) => {
                 return Err(e);
             }
@@ -198,14 +198,12 @@ where
             )
             .await
         {
-            Ok((data, _headers)) => {
+            Ok((data, _, err)) => {
                 let user_value = data.payload.get("user").ok_or_else(|| {
-                    ApiError::ParsingError("Missing 'user' field in response".to_string())
+                    ApiError::ParsingError(err.clone(), serde_json::Error::missing_field("user"))
                 })?;
-                let user =
-                    serde_json::from_value::<UserShort>(user_value.clone()).map_err(|e| {
-                        ApiError::ParsingError(format!("Failed to parse chats user data: {}", e))
-                    })?;
+                let user = serde_json::from_value::<UserShort>(user_value.clone())
+                    .map_err(|e| ApiError::ParsingError(err.clone(), e))?;
                 Ok(user)
             }
             Err(e) => {
@@ -235,13 +233,16 @@ where
             )
             .await
         {
-            Ok((data, _headers)) => {
+            Ok((data, _, err)) => {
                 let id = data.payload.get("user_id").ok_or_else(|| {
-                    ApiError::ParsingError("Missing 'user' field in response".to_string())
+                    ApiError::ParsingError(err.clone(), serde_json::Error::missing_field("user_id"))
                 })?;
-                let id_str = id
-                    .as_str()
-                    .ok_or_else(|| ApiError::ParsingError("User ID is not a string".to_string()))?;
+                let id_str = id.as_str().ok_or_else(|| {
+                    ApiError::ParsingError(
+                        err.clone(),
+                        serde_json::Error::custom("User ID is not a string"),
+                    )
+                })?;
                 Ok(id_str.to_string())
             }
             Err(e) => {

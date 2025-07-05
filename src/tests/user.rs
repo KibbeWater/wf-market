@@ -1,13 +1,13 @@
 use crate::{
     client::{Authenticated, Client},
     enums::*,
-    errors::AuthError,
+    errors::ApiError,
     types::*,
 };
 use dotenv::dotenv;
 use std::env;
 
-async fn setup_client() -> Result<Client<Authenticated>, AuthError> {
+async fn setup_client() -> Result<Client<Authenticated>, ApiError> {
     dotenv().ok();
 
     let user = env::var("TEST_USER").expect("TEST_USER must be set in .env for integration tests");

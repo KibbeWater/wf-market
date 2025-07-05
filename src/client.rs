@@ -95,9 +95,17 @@ impl<State: Clone + 'static> Client<State> {
         path: &str,
         body: Option<Value>,
         headers: Option<HashMap<String, String>>,
-    ) -> Result<(T, HeaderMap), ApiError> {
+    ) -> Result<(T, HeaderMap, RequestError), ApiError> {
         let url = version.api_url().to_owned() + path;
         let mut default_headers = reqwest::header::HeaderMap::new();
+
+        // Create the error object for logging
+        let mut error = RequestError::new(
+            version.clone(),
+            method.to_string(),
+            url.clone(),
+            body.clone(),
+        );
 
         let prefix = match version {
             ApiVersion::V1 => "JWT",
@@ -138,6 +146,19 @@ impl<State: Clone + 'static> Client<State> {
             }
         }
 
+        // Add Headers for the error object
+        error.set_headers(
+            default_headers
+                .iter()
+                .map(|(k, v)| {
+                    (
+                        k.to_string(),
+                        v.to_str().unwrap_or("Invalid Header").to_string(),
+                    )
+                })
+                .collect(),
+        );
+
         // Create the HTTP client with the headers
         let http_client = reqwest::Client::builder()
             .default_headers(default_headers)
@@ -147,7 +168,6 @@ impl<State: Clone + 'static> Client<State> {
         let mut builder = http_client.request(method, &url);
         // If the client needs a body, serialize it
         if let Some(b) = body {
-            println!("Payload: {:?}", b);
             builder = builder.json(&b);
         }
         self.limiter.until_ready().await;
@@ -161,34 +181,43 @@ impl<State: Clone + 'static> Client<State> {
                     .text()
                     .await
                     .map_err(|_| ApiError::Unknown("Error".to_string()))?;
-
+                // Log the error with the response body
+                error.set_content(body.clone());
+                error.set_status_code(status.as_u16());
                 // Check if the status code indicates an error
                 match status {
                     reqwest::StatusCode::OK | reqwest::StatusCode::CREATED => {}
                     reqwest::StatusCode::UNAUTHORIZED => {
-                        return Err(ApiError::Unauthorized);
+                        return Err(ApiError::Unauthorized(error));
                     }
-                    reqwest::StatusCode::NOT_FOUND => {
-                        return Err(ApiError::NotFound(format!(
-                            "Resource not found: {}, Message: {}",
-                            url, body
-                        )));
+                    reqwest::StatusCode::TOO_MANY_REQUESTS => {
+                        return Err(ApiError::TooManyRequests(error));
                     }
-                    reqwest::StatusCode::BAD_REQUEST | reqwest::StatusCode::FORBIDDEN => {
-                        match serde_json::from_str::<ResponseError>(&body) {
-                            Ok(api_result) => {
-                                return Err(ApiError::WFMError(api_result));
+                    reqwest::StatusCode::BAD_REQUEST
+                    | reqwest::StatusCode::FORBIDDEN
+                    | reqwest::StatusCode::NOT_FOUND => {
+                        // Attempt to parse the body as a ResponseError
+                        let wfm_err = match version {
+                            ApiVersion::V1 => {
+                                let error_body = match serde_json::from_str::<Value>(&body) {
+                                    Ok(v) => v,
+                                    Err(e) => return Err(ApiError::ParsingError(error, e)),
+                                };
+                                ResponseError::from_v1(error_body)
                             }
-                            Err(e) => {
-                                return Err(ApiError::ParsingError(
-                                    format!(
-                                        "Error Parsing Bad Request Error: {:?}, Body: {:?}",
-                                        e,
-                                        body.to_string()
-                                    )
-                                    .to_string(),
-                                ));
-                            }
+                            ApiVersion::V2 => match serde_json::from_str::<ResponseError>(&body) {
+                                Ok(api_result) => api_result,
+                                Err(e) => return Err(ApiError::ParsingError(error, e)),
+                            },
+                        };
+                        // Set the error in the RequestError
+                        error.set_error(Some(wfm_err));
+                        if status == reqwest::StatusCode::FORBIDDEN {
+                            return Err(ApiError::Forbidden(error));
+                        } else if status == reqwest::StatusCode::NOT_FOUND {
+                            return Err(ApiError::NotFound(error));
+                        } else {
+                            return Err(ApiError::BadRequest(error));
                         }
                     }
                     _ => {
@@ -202,14 +231,11 @@ impl<State: Clone + 'static> Client<State> {
                 let data = serde_json::from_str::<T>(&body);
 
                 match data {
-                    Ok(data) => Ok((data, headers)),
-                    Err(err) => Err(ApiError::ParsingError(format!(
-                        "Error Parsing: {:?}, Body: {}",
-                        err, body
-                    ))),
+                    Ok(data) => Ok((data, headers, error)),
+                    Err(e) => Err(ApiError::ParsingError(error, e)),
                 }
             }
-            Err(_) => Err(ApiError::RequestError),
+            Err(_) => Err(ApiError::RequestError(error)),
         }
     }
 
@@ -335,7 +361,7 @@ impl Client<Unauthenticated> {
         &self,
         token: String,
         device_id: String,
-    ) -> Result<Client<Authenticated>, AuthError> {
+    ) -> Result<Client<Authenticated>, ApiError> {
         let client = Client::<Authenticated> {
             self_arc: OnceLock::new(),
             token,
@@ -365,12 +391,7 @@ impl Client<Unauthenticated> {
         // Refresh the internal data
         match arc.refresh().await {
             Ok(_) => {}
-            Err(e) => {
-                return Err(AuthError::Unknown(format!(
-                    "Failed to refresh user data: {:?}",
-                    e
-                )));
-            }
+            Err(e) => return Err(e),
         }
         // Copy routes if they were initialized
         if let Some(manifest) = self.manifest_route.get() {
@@ -447,7 +468,7 @@ impl Client<Unauthenticated> {
         username: &str,
         password: &str,
         device_id: &str,
-    ) -> Result<Client<Authenticated>, AuthError> {
+    ) -> Result<Client<Authenticated>, ApiError> {
         let (_, token) = match self
             .authentication()
             .signin(username, password, device_id)
@@ -470,10 +491,10 @@ impl Client<Unauthenticated> {
         self,
         token: &str,
         device_id: &str,
-    ) -> Result<Client<Authenticated>, AuthError> {
+    ) -> Result<Client<Authenticated>, ApiError> {
         // Validate the token
         if token.is_empty() || device_id.is_empty() {
-            return Err(AuthError::InvalidCredentials(
+            return Err(ApiError::Unknown(
                 "Token or device ID cannot be empty".to_string(),
             ));
         }
@@ -498,10 +519,10 @@ impl Client<Authenticated> {
     pub fn get_user(&self) -> Result<UserPrivate, ApiError> {
         match self.user().get_user() {
             Ok(user) => Ok(user),
-            Err(e) => Err(ApiError::Unknown(format!(
-                "Failed to get user data: {:?}",
-                e
-            ))),
+            Err(e) => match e {
+                ApiError::Unauthorized(e) => return Err(ApiError::InvalidCredentials(e)),
+                _ => Err(e),
+            },
         }
     }
     /**
@@ -539,15 +560,10 @@ impl Client<Authenticated> {
     # Returns
     If the data is successfully refreshed.
     */
-    pub async fn refresh(&self) -> Result<String, AuthError> {
+    pub async fn refresh(&self) -> Result<String, ApiError> {
         match self.user().me().await {
             Ok(_) => {}
-            Err(e) => {
-                return Err(AuthError::InvalidCredentials(format!(
-                    "Failed to refresh user data: {:?}",
-                    e
-                )));
-            }
+            Err(e) => return Err(e),
         }
         Ok("Successfully refreshed user data".to_string())
     }
