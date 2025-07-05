@@ -21,7 +21,7 @@ pub(super) fn mask_sensitive_data(data: &mut Map<String, Value>, properties: &[&
         match value {
             Value::Object(sub_object) => {
                 // If the value is another object, recursively loop through its properties
-                mask_sensitive_data(sub_object, properties.clone());
+                mask_sensitive_data(sub_object, properties);
             }
             _ => {
                 if properties.contains(&key.as_str()) {
