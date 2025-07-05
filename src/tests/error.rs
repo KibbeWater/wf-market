@@ -1,24 +1,4 @@
-use crate::{
-    Authenticated, Client,
-    errors::ApiError,
-    types::{
-        AuctionFilter, CreateAuctionItem, CreateAuctionParams, ItemAttribute, UpdateAuctionParams,
-    },
-};
-use dotenv::dotenv;
-use std::env;
-async fn setup_client() -> Result<Client<Authenticated>, ApiError> {
-    dotenv().ok();
-
-    let user = env::var("TEST_USER").expect("TEST_USER must be set in .env for integration tests");
-    let pass = env::var("TEST_PASS").expect("TEST_PASS must be set in .env for integration tests");
-
-    assert!(!user.is_empty());
-    assert!(!pass.is_empty());
-
-    let _client = Client::new();
-    _client.login(&user, &pass, "dev").await
-}
+use crate::{Client, errors::ApiError};
 #[tokio::test]
 async fn test_login_error_handling_and_masking() {
     let client = Client::new();
