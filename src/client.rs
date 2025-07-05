@@ -330,31 +330,13 @@ impl Client<Unauthenticated> {
             _state: PhantomData,
         }
     }
-    /**
-     * Creates a new `Client` with the specified parameters.
-     * # Arguments
-     * - `username`: The username to use for authentication
-     * - `password`: The password to use for authentication
-     * - `device_id`: The device ID to use for authentication
-     * # Returns
-     * A `Result` containing the authenticated `Client` or an `AuthError` if authentication fails.
-     */
-    pub async fn login(
-        self,
-        username: &str,
-        password: &str,
-        device_id: &str,
-    ) -> Result<Client<Authenticated>, AuthError> {
-        let (_, token) = match self
-            .authentication()
-            .signin(username, password, device_id)
-            .await
-        {
-            Ok((user, token)) => (user, token),
-            Err(e) => return Err(e),
-        };
 
-        let new_client = Client::<Authenticated> {
+    async fn create_authenticated_client(
+        &self,
+        token: String,
+        device_id: String,
+    ) -> Result<Client<Authenticated>, AuthError> {
+        let client = Client::<Authenticated> {
             self_arc: OnceLock::new(),
             token,
             device_id: device_id.to_string(),
@@ -375,8 +357,7 @@ impl Client<Unauthenticated> {
             limiter: self.limiter.clone(),
             _state: PhantomData,
         };
-
-        let arc = Arc::new(new_client);
+        let arc = Arc::new(client);
 
         // Set the self_arc inside the client to point to this Arc
         arc.self_arc.set(arc.clone()).unwrap();
@@ -451,37 +432,64 @@ impl Client<Unauthenticated> {
 
         Ok(Arc::try_unwrap(arc).unwrap_or_else(|arc| (*arc).clone()))
     }
+
+    /**
+     * Creates a new `Client` with the specified parameters.
+     * # Arguments
+     * - `username`: The username to use for authentication
+     * - `password`: The password to use for authentication
+     * - `device_id`: The device ID to use for authentication
+     * # Returns
+     * A `Result` containing the authenticated `Client` or an `AuthError` if authentication fails.
+     */
+    pub async fn login(
+        self,
+        username: &str,
+        password: &str,
+        device_id: &str,
+    ) -> Result<Client<Authenticated>, AuthError> {
+        let (_, token) = match self
+            .authentication()
+            .signin(username, password, device_id)
+            .await
+        {
+            Ok((user, token)) => (user, token),
+            Err(e) => return Err(e),
+        };
+
+        let new_client = self
+            .create_authenticated_client(token, device_id.to_string())
+            .await?;
+        match new_client.refresh().await {
+            Ok(_) => {}
+            Err(e) => return Err(e),
+        }
+        Ok(new_client)
+    }
+    pub async fn login_with_token(
+        self,
+        token: &str,
+        device_id: &str,
+    ) -> Result<Client<Authenticated>, AuthError> {
+        // Validate the token
+        if token.is_empty() || device_id.is_empty() {
+            return Err(AuthError::InvalidCredentials(
+                "Token or device ID cannot be empty".to_string(),
+            ));
+        }
+
+        let new_client = self
+            .create_authenticated_client(token.to_string(), device_id.to_string())
+            .await?;
+        match new_client.refresh().await {
+            Ok(_) => {}
+            Err(e) => return Err(e),
+        }
+        Ok(new_client)
+    }
 }
 
 impl Client<Authenticated> {
-    pub fn new_authenticated(token: &str, device_id: &str) -> Self {
-        // This constructor is only for internal use, it assumes the client is authenticated
-        // If this panics, we got hit by a cosmic particle
-        assert!(!token.is_empty(), "Token cannot be empty");
-        assert!(!device_id.is_empty(), "Device ID cannot be empty");
-        let client = Client::<Authenticated> {
-            self_arc: OnceLock::new(),
-            token: token.to_string(),
-            device_id: device_id.to_string(),
-            platform: Platform::default(),
-            language: Language::default(),
-            crossplay: true,
-            manifest_route: OnceLock::new(),
-            item_route: OnceLock::new(),
-            riven_route: OnceLock::new(),
-            lich_route: OnceLock::new(),
-            sister_route: OnceLock::new(),
-            order_route: OnceLock::new(),
-            user_route: OnceLock::new(),
-            achievement_route: OnceLock::new(),
-            authentication_route: OnceLock::new(),
-            chat_route: OnceLock::new(),
-            auction_route: OnceLock::new(),
-            limiter: build_limiter(REQUESTS_PER_SECOND).into(),
-            _state: PhantomData,
-        };
-        client
-    }
     /**
      * Returns the current user data
      * # Returns
@@ -531,11 +539,11 @@ impl Client<Authenticated> {
     # Returns
     If the data is successfully refreshed.
     */
-    pub async fn refresh(&self) -> Result<String, ApiError> {
+    pub async fn refresh(&self) -> Result<String, AuthError> {
         match self.user().me().await {
             Ok(_) => {}
             Err(e) => {
-                return Err(ApiError::Unknown(format!(
+                return Err(AuthError::InvalidCredentials(format!(
                     "Failed to refresh user data: {:?}",
                     e
                 )));
