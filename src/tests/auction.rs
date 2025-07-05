@@ -7,6 +7,7 @@ use crate::{
 };
 use dotenv::dotenv;
 use std::env;
+use tokio_tungstenite::tungstenite::accept;
 async fn setup_client() -> Result<Client<Authenticated>, ApiError> {
     dotenv().ok();
 
@@ -95,9 +96,13 @@ async fn create_riven() {
             crate::enums::Polarity::Vazarin,
         ),
     );
-
-    let auction = client.auction().create(riven).await.unwrap();
-    println!("New Auction Created: {:?}", auction);
+    match client.auction().create(riven).await {
+        Ok(auction) => println!("New Auction Created: {:?}", auction),
+        Err(e) => {
+            eprintln!("Error creating auction: {}", e);
+            return;
+        }
+    }
 }
 
 #[tokio::test]

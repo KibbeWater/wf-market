@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
 
 use serde::Deserialize;
 
@@ -75,9 +76,47 @@ impl RequestError {
                 .iter()
                 .any(|&prop| lower_key.contains(prop.to_lowercase().as_str()))
             {
-                *value = "***".to_string();
+                *value = "*******".to_string();
             }
         }
+    }
+
+    /**
+     * Returns a human-readable error sentence that masks sensitive data.
+     * This provides a secure way to display error information to users.
+     */
+    pub fn error_sentence(&self) -> String {
+        let mut parts = Vec::new();
+
+        // Add HTTP method and URL
+        parts.push(format!("{} {}", self.method, self.url));
+
+        // Add status code if available
+        if self.status_code != 0 {
+            parts.push(format!("returned status {}", self.status_code));
+        }
+
+        // Add API Payload
+        if let Some(ref payload) = self.payload {
+            parts.push(format!("Payload: {}", payload));
+        }
+
+        // Add WFM error if available
+        if let Some(ref wfm_error) = self.wfm_error {
+            parts.push(format!("error: {}", wfm_error));
+        }
+
+        // Add content if available (but limit length for security)
+        if !self.content.is_empty() {
+            let content_preview = if self.content.len() > 100 {
+                format!("{}...", &self.content[..100])
+            } else {
+                self.content.clone()
+            };
+            parts.push(format!("content: {}", content_preview));
+        }
+
+        parts.join(", ")
     }
 }
 
@@ -93,5 +132,11 @@ impl Default for RequestError {
             content: String::new(),
             wfm_error: None,
         }
+    }
+}
+
+impl Display for RequestError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.error_sentence())
     }
 }

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -85,5 +86,31 @@ impl ResponseError {
         } else {
             error_map.insert(key.to_string(), format!("{:?}", value));
         }
+    }
+}
+
+impl Display for ResponseError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        // Start with API version
+        write!(f, "API v{}", self.api_version)?;
+
+        // Add error details from the error body
+        if let Some(ref inputs) = self.error.inputs {
+            if !inputs.is_empty() {
+                write!(f, " - ")?;
+                let error_messages: Vec<String> = inputs
+                    .iter()
+                    .map(|(key, value)| format!("{}: {}", key, value))
+                    .collect();
+                write!(f, "{}", error_messages.join(", "))?;
+            }
+        }
+
+        // Add request info if available
+        if let Some(ref request) = self.error.request {
+            write!(f, " (request: {:?})", request)?;
+        }
+
+        Ok(())
     }
 }
