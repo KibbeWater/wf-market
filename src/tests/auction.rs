@@ -7,7 +7,6 @@ use crate::{
 };
 use dotenv::dotenv;
 use std::env;
-use tokio_tungstenite::tungstenite::accept;
 async fn setup_client() -> Result<Client<Authenticated>, ApiError> {
     dotenv().ok();
 
