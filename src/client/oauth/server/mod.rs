@@ -1,3 +1,7 @@
+/*!
+Expose a tiny_http helper server to catch OAuth code callbacks
+*/
+
 use std::collections::HashMap;
 use tiny_http::{Response, Server};
 use url::Url;
@@ -11,7 +15,7 @@ pub fn start_listener_server(port: u16) -> Result<String, Box<dyn std::error::Er
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
 
         let response = Response::from_string(
-            "<html><body>You can now close this tab<script>window.close()</script></body></html>"
+            "You can now close this tab"
         );
         let _ = request.respond(response);
 

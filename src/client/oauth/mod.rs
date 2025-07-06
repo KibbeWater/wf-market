@@ -1,5 +1,5 @@
 /*!
-Provides the [`OAuthClient`][crate::client::oauth::OAuthClient] struct to obtain OAuth access tokens
+Provides the [`OAuthClient`] struct to obtain OAuth access tokens
 
 # Examples
 
@@ -11,28 +11,32 @@ use tokio::task;
 use wf_market::client::oauth::{
     server::start_listener_server,
     ChallengeMethod, 
-    OAuth2Client
+    OAuthClient
 };
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let oauth = OAuth2Client::new(
+    let oauth = OAuthClient::new(
         "client_id",
         "redirect_uri",
         ChallengeMethod::S256,
         vec![""]
     );
     
+    // Listen on a separate task so that we aren't blocked waiting for a code
     let listener = task::spawn(async move {
         start_listener_server(4321)
     });
     
+    // Provide the user with some way to open the URL in a browser
     println!("Authorize: {}",
              oauth.create_auth_url());
 
+    // Join our task and get the result
     let code = listener.await.unwrap()
         .map_err(|e| e as Box<dyn std::error::Error>)?;
     
+    // Exchange our code with the server to get our access token
     match oauth.exchange_code(code).await { 
         Ok(access_token) => println!("Your access token: {}", access_token),
         Err(err) => println!("Error: {}", err),
@@ -75,11 +79,13 @@ impl std::fmt::Display for ChallengeMethod {
     TODO: Untested on actual API, a couple of assumptions are made and features missing due to those assumptions
     1. Only return an access_token on code exchanges, as it's the only one required by the OAuth spec
     2. There are no deviations from the OAuth spec, and therefore errors are not implemented nor tested
+    3. If our access token is a JWT, we can also implement additional expiration checks and better first-party error handling
+        and handling of the token in general using the [`OAuthKeys`] struct
  */
 /**
 OAuth Client used to exchange access tokens with the server using OAuth PKCE
 */
-pub struct OAuth2Client {
+pub struct OAuthClient {
     // Configurable stuffz
     client_id: String,
     redirect_uri: String,
@@ -90,13 +96,13 @@ pub struct OAuth2Client {
     code_verifier: String,
 }
 
-impl OAuth2Client {
+impl OAuthClient {
     pub fn new(client_id: &str, redirect_uri: &str, challenge_method: ChallengeMethod, scopes: Vec<&str>) -> Self {
-        OAuth2Client {
+        OAuthClient {
             client_id: client_id.to_string(),
             redirect_uri: redirect_uri.to_string(),
             method: challenge_method,
-            code_verifier: OAuth2Client::generate_code_verifier(128),
+            code_verifier: OAuthClient::generate_code_verifier(128),
             scopes: scopes.iter().map(|s| s.to_string()).collect(),
         }
     }
