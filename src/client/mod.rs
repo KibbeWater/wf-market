@@ -38,6 +38,7 @@ mod order;
 mod riven;
 mod utils;
 pub mod ws;
+pub mod oauth;
 
 use crate::error::{ApiError, ApiErrorBody, ErrorResponse};
 use crate::types::filter::OrdersTopFilters;
