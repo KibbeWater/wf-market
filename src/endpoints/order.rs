@@ -92,7 +92,10 @@ impl<State: Clone + 'static> OrderRoute<State> {
      * - `Ok(Vec<OrderWithUser>)` if the orders were fetched successfully
      * - `Err(ApiError)` if there was an error fetching the order
      */
-    pub async fn get_orders_by_item(&self, slug: &str) -> Result<Vec<OrderWithUser>, ApiError> {
+    pub async fn get_orders_by_item(
+        &self,
+        slug: &str,
+    ) -> Result<OrderList<OrderWithUser>, ApiError> {
         let client = self.client.upgrade().expect("Client should not be dropped");
 
         match client
@@ -106,7 +109,7 @@ impl<State: Clone + 'static> OrderRoute<State> {
             )
             .await
         {
-            Ok((orders, _, _)) => Ok(orders.data),
+            Ok((orders, _, _)) => Ok(OrderList::new(orders.data)),
             Err(e) => {
                 return Err(e);
             }
@@ -177,7 +180,7 @@ where
     # Returns
     List of all users orders
     */
-    pub async fn my_orders(&self) -> Result<Vec<Order>, ApiError> {
+    pub async fn my_orders(&self) -> Result<OrderList<Order>, ApiError> {
         let client = self.client.upgrade().expect("Client should not be dropped");
 
         match client
@@ -195,7 +198,7 @@ where
                 let mut ca_orders = self.orders.lock().unwrap();
                 ca_orders.clear();
                 ca_orders.extend(orders.data.clone());
-                Ok(orders.data)
+                Ok(OrderList::new(orders.data))
             }
             Err(e) => {
                 return Err(e);

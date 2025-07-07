@@ -2,9 +2,10 @@ use crate::{
     client::{Authenticated, Client},
     enums::*,
     errors::ApiError,
-    types::{CreateOrderParams, TopOrdersFilters, UpdateOrderParams},
+    types::{CreateOrderParams, SubType, TopOrdersFilters, UpdateOrderParams},
 };
 use dotenv::dotenv;
+use serde_json::json;
 use std::env;
 
 async fn setup_client() -> Result<Client<Authenticated>, ApiError> {
@@ -51,17 +52,22 @@ async fn get_orders_by_item() {
     let slug = "primed_target_cracker"; // Item slug to fetch orders for
 
     match client.order().get_orders_by_item(slug).await {
-        Ok(orders) => {
+        Ok(mut orders) => {
+            orders.filter_by_sub_type(Some(SubType::mods(10)), false);
+            orders.filter_user_status(StatusType::InGame, false);
             println!(
-                "✅ Successfully fetched orders for '{}': {} total",
+                "✅ Lowest sell order price for '{}': {} platinum",
                 slug,
-                orders.len()
+                orders.lowest_price(OrderType::Sell)
             );
-            if !orders.is_empty() {
-                println!(
-                    "   Sample order: {} - {} platinum ({})",
-                    orders[0].order.id, orders[0].order.platinum, orders[0].user.name
-                );
+            println!(
+                "✅ Highest buy order price for '{}': {} platinum",
+                slug,
+                orders.highest_price(OrderType::Buy)
+            );
+            match crate::utils::write_json_file("orders_by_item.json", &json!(orders)) {
+                Ok(_) => println!("✅ Orders by item saved to 'orders_by_item.json'"),
+                Err(e) => eprintln!("💥 Failed to save orders to file: {:?}", e),
             }
         }
         Err(e) => {
@@ -153,16 +159,23 @@ async fn my_orders() {
 
             match client.order().my_orders().await {
                 Ok(orders) => {
-                    println!("✅ Successfully fetched my orders: {} total", orders.len());
-                    for (i, order) in orders.iter().take(3).enumerate() {
+                    let lowest_buy = orders.lowest_order(OrderType::Buy);
+                    if let Some(order) = lowest_buy {
                         println!(
-                            "   Order {}: {} - {} platinum ({:?})",
-                            i + 1,
-                            order.id,
-                            order.platinum,
-                            order.order_type
+                            "   Lowest buy order: {} - {} platinum",
+                            order.item_id, order.platinum,
                         );
                     }
+                    // println!("✅ Successfully fetched my orders: {} total", orders.len());
+                    // for (i, order) in orders.iter().take(3).enumerate() {
+                    //     println!(
+                    //         "   Order {}: {} - {} platinum ({:?})",
+                    //         i + 1,
+                    //         order.id,
+                    //         order.platinum,
+                    //         order.order_type
+                    //     );
+                    // }
                 }
                 Err(e) => {
                     eprintln!("💥 Failed to fetch my orders: {:?}", e);
@@ -208,13 +221,21 @@ async fn update_order() {
 
 #[tokio::test]
 async fn create_regular_order() {
-    let id = "54aae292e7798909064f1575"; // Secura Dual Cestra Item ID
+    let id = "563893fcb66f83093e823472"; // Secura Dual Cestra Item ID
 
     match setup_client().await {
         Ok(client) => {
             match client
                 .order()
-                .create(CreateOrderParams::new(id, OrderType::Buy, 10, 1, true))
+                .create(CreateOrderParams::new_with_subtype(
+                    id,
+                    OrderType::Buy,
+                    10,
+                    1,
+                    true,
+                    None,
+                    SubType::mods(10),
+                ))
                 .await
             {
                 Ok(new_order) => {

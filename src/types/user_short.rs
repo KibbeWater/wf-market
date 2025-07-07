@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::enums::*;
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct UserShort {
     pub id: String,
     #[serde(rename = "ingame_name", alias = "ingameName")]
