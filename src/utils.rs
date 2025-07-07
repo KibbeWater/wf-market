@@ -31,3 +31,21 @@ pub(super) fn mask_sensitive_data(data: &mut Map<String, Value>, properties: &[&
         }
     }
 }
+
+/**
+ * INTERNAL: Write a JSON file to the specified path.
+ * This function serializes the provided data into JSON format and writes it to a file.
+ *
+ * # Arguments
+ * - `path`: The file path where the JSON data should be written.
+ * - `data`: The data to be serialized and written to the file.
+ *
+ * # Returns
+ * - `Ok(())` if the operation was successful.
+ * - An `std::io::Error` if there was an issue creating or writing to the file.
+ */
+pub fn write_json_file<T: serde::Serialize>(path: &str, data: &T) -> std::io::Result<()> {
+    let file = std::fs::File::create(path)?;
+    serde_json::to_writer(file, data)?;
+    Ok(())
+}
