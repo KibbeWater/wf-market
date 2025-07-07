@@ -98,7 +98,6 @@ impl<State: OrderLike + Clone> OrderList<State> {
     pub fn total_orders(&self) -> usize {
         self.sell_orders.len() + self.buy_orders.len()
     }
-
     pub fn filter_by_sub_type(&mut self, sub_type: Option<SubType>, exclude: bool) {
         let sub_type = match sub_type {
             Some(st) => st,
@@ -114,7 +113,6 @@ impl<State: OrderLike + Clone> OrderList<State> {
 
         self.buy_orders.retain(|o| *o.sub_type() == sub_type);
     }
-
     pub fn lowest_order(&self, order_type: OrderType) -> Option<State> {
         let orders = match order_type {
             OrderType::Sell => &self.sell_orders,

@@ -62,10 +62,10 @@ impl<State: Clone + 'static> OrderRoute<State> {
      * 500 max, for the last 4 hours, sorted by created_at descending.
      * Cached, with 1min refresh interval.
      * # Returns
-     * - `Ok(Vec<OrderWithUser>)` if the orders were fetched successfully
+     * - `Ok(OrderList<OrderWithUser>)` if the orders were fetched successfully
      * - `Err(ApiError)` if there was an error fetching the order
      */
-    pub async fn recent(&self) -> Result<Vec<OrderWithUser>, ApiError> {
+    pub async fn recent(&self) -> Result<OrderList<OrderWithUser>, ApiError> {
         let client = self.client.upgrade().expect("Client should not be dropped");
 
         match client
@@ -79,7 +79,7 @@ impl<State: Clone + 'static> OrderRoute<State> {
             )
             .await
         {
-            Ok((orders, _, _)) => Ok(orders.data),
+            Ok((orders, _, _)) => Ok(OrderList::new(orders.data)),
             Err(e) => {
                 return Err(e);
             }
@@ -89,7 +89,7 @@ impl<State: Clone + 'static> OrderRoute<State> {
     /**
      * Get a list of all orders for an item from users who was online within the last 7 days.
      * # Returns
-     * - `Ok(Vec<OrderWithUser>)` if the orders were fetched successfully
+     * - `Ok(OrderList<OrderWithUser>)` if the orders were fetched successfully
      * - `Err(ApiError)` if there was an error fetching the order
      */
     pub async fn get_orders_by_item(
@@ -176,9 +176,9 @@ where
     }
     /**
     Get the authenticated users orders
-
-    # Returns
-    List of all users orders
+    * # Returns
+    * - `Ok(OrderList<Order>)` if the orders were fetched successfully
+    * - `Err(ApiError)` if there was an error fetching the orders
     */
     pub async fn my_orders(&self) -> Result<OrderList<Order>, ApiError> {
         let client = self.client.upgrade().expect("Client should not be dropped");
