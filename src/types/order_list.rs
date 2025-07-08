@@ -161,6 +161,45 @@ impl<State: OrderLike + Clone> OrderList<State> {
         }
         return 0;
     }
+
+    pub fn add(&mut self, order: State) {
+        match order.order_type() {
+            OrderType::Sell => {
+                self.sell_orders.push(order);
+            }
+            OrderType::Buy => {
+                self.buy_orders.push(order);
+            }
+        }
+    }
+
+    pub fn remove_by_id(&mut self, id: &str) {
+        self.sell_orders
+            .retain(|o| o.to_order().id != id);
+        self.buy_orders
+            .retain(|o| o.to_order().id != id);
+    }
+
+    pub fn update(&mut self, order_id: &str, args: UpdateOrderParams) {
+        let mut orders = self.buy_orders
+            .iter_mut()
+            .chain(self.sell_orders.iter_mut());
+        let index = orders.position(|o| o.to_order().id == order_id);
+        if let Some(index) = index {
+            if let Some(order) = orders.nth(index) {
+                if let Some(platinum) = args.platinum {
+                    order.to_order().platinum = platinum;
+                }
+                if let Some(subtype) = args.subtype {
+                    order.to_order().subtype = subtype;
+                }
+                if let Some(order_type) = args.order_type {
+                    order.to_order().order_type = order_type;
+                }
+            }
+        }
+    }
+
 }
 
 impl OrderList<OrderWithUser> {
