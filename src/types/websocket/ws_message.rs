@@ -35,7 +35,7 @@ impl WsMessage {
         )
         .with_id("INTERNAL")
     }
-    pub fn disconnect(error: String, version: ApiVersion) -> Self {
+    pub fn disconnect(error: &str, version: ApiVersion) -> Self {
         WsMessage::new(
             "@internal|internal/disconnected",
             Some(json!({"reason": error})),

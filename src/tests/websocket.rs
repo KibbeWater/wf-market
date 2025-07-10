@@ -177,8 +177,8 @@ async fn test_connection() {
     assert!(received_messages.lock().unwrap().len() > 0);
 }
 
-#[test]
-fn websocket_disconnect() {
+#[tokio::test]
+async fn websocket_disconnect() {
     use tokio::sync::Notify;
 
     let received_messages: Arc<Mutex<Vec<WsMessage>>> = Arc::new(Mutex::new(Vec::new()));
@@ -191,7 +191,8 @@ fn websocket_disconnect() {
 
     let ws_client = client
         .create_websocket(ApiVersion::V1)
-        .register_callback("USER/SET_STATUS", move |msg, _, _| {
+        .register_callback("internal/disconnected", move |msg, _, _| {
+            println!("WebSocket disconnected event: {:?}", msg);
             let mut vec = received_messages_clone.lock().unwrap();
             vec.push(msg.clone());
             notify_clone.notify_one(); // signal arrival
@@ -202,17 +203,21 @@ fn websocket_disconnect() {
         .await
         .unwrap();
 
+    tokio::time::sleep(Duration::from_secs(50)).await;
     match ws_client.disconnect() {
         Ok(_) => println!("WS client disconnected"),
         Err(e) => panic!("{:?}", e),
     }
 
+    tokio::time::sleep(Duration::from_secs(10)).await;
+
     // Wait for a message or timeout
     let result = tokio::time::timeout(Duration::from_secs(5), notify.notified()).await;
 
+    println!("Disconnect result: {:?}", result);
     // Wait for 15 seconds to ensure the disconnect message is processed
-    tokio::time::sleep(Duration::from_secs(15)).await;
-    
+    tokio::time::sleep(Duration::from_secs(10)).await;
+
     assert!(
         result.is_ok() && !received_messages.lock().unwrap().is_empty(),
         "Expected at least one message but got none"

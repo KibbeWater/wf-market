@@ -1,10 +1,17 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicBool, Ordering},
+};
+
+use futures_util::stream::AbortHandle;
 
 use crate::{enums::ApiVersion, errors::WsError, types::websocket::*};
 
 // The actual WebSocket client (runtime instance)
 pub struct WsClient {
     pub sender: Arc<Mutex<Option<MessageSender>>>,
+    pub(crate) abort_handle: Arc<Mutex<Option<AbortHandle>>>,
+    pub(crate) should_stop: Arc<AtomicBool>,
 }
 
 impl WsClient {
@@ -78,8 +85,20 @@ impl WsClient {
     pub fn get_sender(&self) -> Option<MessageSender> {
         self.sender.lock().unwrap().clone()
     }
-    pub fn disconnect(&self) -> Result<String, WsError> {
-        panic("Disconnect method is not implemented yet.");
-        Ok("Disconnect method is not implemented yet.".to_string())
+    pub fn disconnect(&self) -> Result<(), WsError> {
+        self.should_stop.store(true, Ordering::Relaxed);
+
+        // Abort the write task to force it to stop
+        if let Some(abort_handle) = self.abort_handle.lock().unwrap().take() {
+            abort_handle.abort();
+        }
+
+        // Clear the sender to mark as disconnected
+        *self.sender.lock().unwrap() = None;
+        Ok(())
+    }
+
+    pub fn is_connected(&self) -> bool {
+        !self.should_stop.load(Ordering::Relaxed) && self.sender.lock().unwrap().is_some()
     }
 }

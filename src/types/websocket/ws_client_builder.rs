@@ -1,6 +1,7 @@
 use futures_util::stream::{AbortHandle, Abortable};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::json;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -54,15 +55,22 @@ impl WsClientBuilder {
     pub async fn build(self) -> Result<WsClient, WsError> {
         let router = Arc::new(self.router);
         let sender_holder = Arc::new(Mutex::new(None));
+        let abort_handle_holder = Arc::new(Mutex::new(None));
+        let should_stop = Arc::new(AtomicBool::new(false));
 
         tokio::spawn({
+            let should_stop_spawn = Arc::clone(&should_stop);
             let sender_holder = Arc::clone(&sender_holder);
             let router = Arc::clone(&router);
-            // let version = self.version.clone();
+            let abort_handle_holder = Arc::clone(&abort_handle_holder);
+
             async move {
                 let version = &self.version;
                 let ws_url = version.websocket_url();
                 loop {
+                    if should_stop_spawn.load(Ordering::Relaxed) {
+                        break;
+                    }
                     let mut request = ws_url.into_client_request().unwrap();
                     let headers = request.headers_mut();
                     if version == &ApiVersion::V2 {
@@ -72,11 +80,8 @@ impl WsClientBuilder {
                     }
                     headers.append("User-Agent", "wf-market-rs".parse().unwrap());
 
-                    // println!("Attempting to connect to WebSocket...");
-
                     match connect_async(request).await {
                         Ok((ws_stream, _)) => {
-                            // println!("Connected to WebSocket.");
                             let ws_error = Arc::new(Mutex::new(None));
                             let ws_error_write = Arc::clone(&ws_error);
                             let ws_error_read = Arc::clone(&ws_error);
@@ -110,25 +115,29 @@ impl WsClientBuilder {
 
                             *sender_holder.lock().unwrap() = Some(sender.clone());
 
-                            // Create an abort handle to control the write task
+                            // Create and store abort handle
                             let (abort_handle, abort_registration) = AbortHandle::new_pair();
+                            *abort_handle_holder.lock().unwrap() = Some(abort_handle.clone());
 
                             // Write task (wrapped in Abortable) Is responsible for sending messages
                             // It will be aborted if the read task fails or ends
                             let write_task = tokio::spawn(Abortable::new(
-                                async move {
-                                    let ws_error_write = Arc::clone(&ws_error_write);
-                                    while let Some(msg) = rx.recv().await {
-                                        if let Ok(json) = serde_json::to_string(&msg) {
-                                            if let Err(e) = write
-                                                .send(Message::Text(Utf8Bytes::from(json)))
-                                                .await
-                                            {
-                                                eprintln!("Write failed: {}", e);
-                                                *ws_error_write.lock().unwrap() = Some(e);
-                                                break;
+                                {
+                                    async move {
+                                        let ws_error_write = Arc::clone(&ws_error_write);
+                                        while let Some(msg) = rx.recv().await {
+                                            if let Ok(json) = serde_json::to_string(&msg) {
+                                                if let Err(e) = write
+                                                    .send(Message::Text(Utf8Bytes::from(json)))
+                                                    .await
+                                                {
+                                                    eprintln!("Write failed: {}", e);
+                                                    *ws_error_write.lock().unwrap() = Some(e);
+                                                    break;
+                                                }
                                             }
                                         }
+                                        println!("Write task ended.");
                                     }
                                 },
                                 abort_registration,
@@ -140,35 +149,55 @@ impl WsClientBuilder {
                                 let version = version.clone();
                                 let router = Arc::clone(&router);
                                 let abort_handle = abort_handle.clone(); // Move handle in
+                                let should_stop_read = Arc::clone(&should_stop_spawn);
                                 let mut read = read;
 
                                 async move {
                                     let ws_error_read = Arc::clone(&ws_error_read);
-                                    while let Some(msg) = read.next().await {
-                                        match msg {
-                                            Ok(Message::Text(text)) => {
-                                                if let Err(e) = WsClient::handle_text_message(
-                                                    &router,
-                                                    &text,
-                                                    &sender,
-                                                    version.clone(),
-                                                ) {
-                                                    eprintln!("Handle error: {:?}", e);
+                                    loop {
+                                        // Check stop signal before trying to read
+                                        if should_stop_read.load(Ordering::Relaxed) {
+                                            break;
+                                        }
+
+                                        // Use timeout to avoid blocking indefinitely on read
+                                        match tokio::time::timeout(
+                                            Duration::from_millis(100),
+                                            read.next(),
+                                        )
+                                        .await
+                                        {
+                                            Ok(Some(msg)) => match msg {
+                                                Ok(Message::Text(text)) => {
+                                                    if let Err(e) = WsClient::handle_text_message(
+                                                        &router,
+                                                        &text,
+                                                        &sender,
+                                                        version.clone(),
+                                                    ) {
+                                                        eprintln!("Handle error: {:?}", e);
+                                                    }
                                                 }
-                                            }
-                                            Ok(Message::Close(_)) => {
-                                                println!("Connection closed by server.");
+                                                Ok(Message::Close(_)) => {
+                                                    println!("Connection closed by server.");
+                                                    break;
+                                                }
+                                                Ok(_) => (),
+                                                Err(e) => {
+                                                    eprintln!("Read error: {}", e);
+                                                    *ws_error_read.lock().unwrap() = Some(e);
+                                                    break;
+                                                }
+                                            },
+                                            Ok(None) => {
                                                 break;
                                             }
-                                            Ok(_) => (),
-                                            Err(e) => {
-                                                eprintln!("Read error: {}", e);
-                                                *ws_error_read.lock().unwrap() = Some(e);
-                                                break;
+                                            Err(_) => {
+                                                // Timeout occurred, continue loop to check stop signal
+                                                continue;
                                             }
                                         }
                                     }
-
                                     // If we exit the read loop, abort the write task
                                     abort_handle.abort();
                                 }
@@ -177,15 +206,17 @@ impl WsClientBuilder {
                             // Wait for both tasks
                             let _ = tokio::join!(read_task, write_task);
                             // Send a message to the sender to indicate disconnection
+                            let reason = if should_stop_spawn.load(Ordering::Relaxed) {
+                                "Manual disconnect"
+                            } else {
+                                &format!(
+                                    "Connection lost: {:?} will retry in 5 seconds",
+                                    ws_error.lock().unwrap()
+                                )
+                            };
                             WsClient::send_disconnect_message(
                                 &router,
-                                &WsMessage::disconnect(
-                                    format!(
-                                        "Connection lost: {:?} will retry in 5 seconds",
-                                        ws_error.lock().unwrap()
-                                    ),
-                                    self.version.clone(),
-                                ),
+                                &WsMessage::disconnect(reason, self.version.clone()),
                                 &sender,
                             )
                             .unwrap();
@@ -205,6 +236,8 @@ impl WsClientBuilder {
 
         Ok(WsClient {
             sender: Arc::clone(&sender_holder),
+            abort_handle: Arc::clone(&abort_handle_holder),
+            should_stop: Arc::clone(&should_stop),
         })
     }
 }
