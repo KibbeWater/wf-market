@@ -178,6 +178,48 @@ async fn test_connection() {
 }
 
 #[test]
+fn websocket_disconnect() {
+    use tokio::sync::Notify;
+
+    let received_messages: Arc<Mutex<Vec<WsMessage>>> = Arc::new(Mutex::new(Vec::new()));
+    let notify = Arc::new(Notify::new());
+
+    let received_messages_clone = Arc::clone(&received_messages);
+    let notify_clone = Arc::clone(&notify);
+
+    let client = setup_client().await.unwrap();
+
+    let ws_client = client
+        .create_websocket(ApiVersion::V1)
+        .register_callback("USER/SET_STATUS", move |msg, _, _| {
+            let mut vec = received_messages_clone.lock().unwrap();
+            vec.push(msg.clone());
+            notify_clone.notify_one(); // signal arrival
+            Ok(())
+        })
+        .unwrap()
+        .build()
+        .await
+        .unwrap();
+
+    match ws_client.disconnect() {
+        Ok(_) => println!("WS client disconnected"),
+        Err(e) => panic!("{:?}", e),
+    }
+
+    // Wait for a message or timeout
+    let result = tokio::time::timeout(Duration::from_secs(5), notify.notified()).await;
+
+    // Wait for 15 seconds to ensure the disconnect message is processed
+    tokio::time::sleep(Duration::from_secs(15)).await;
+    
+    assert!(
+        result.is_ok() && !received_messages.lock().unwrap().is_empty(),
+        "Expected at least one message but got none"
+    );
+}
+
+#[test]
 fn test_route_parsing_with_parameter() {
     let route = Route::parse("@wfm|subscribe/newOrders").unwrap();
     assert_eq!(route.protocol, "@wfm");

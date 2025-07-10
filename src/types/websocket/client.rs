@@ -78,4 +78,8 @@ impl WsClient {
     pub fn get_sender(&self) -> Option<MessageSender> {
         self.sender.lock().unwrap().clone()
     }
+    pub fn disconnect(&self) -> Result<String, WsError> {
+        panic("Disconnect method is not implemented yet.");
+        Ok("Disconnect method is not implemented yet.".to_string())
+    }
 }
