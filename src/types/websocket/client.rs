@@ -8,6 +8,7 @@ use futures_util::stream::AbortHandle;
 use crate::{enums::ApiVersion, errors::WsError, types::websocket::*};
 
 // The actual WebSocket client (runtime instance)
+#[derive(Clone)]
 pub struct WsClient {
     pub sender: Arc<Mutex<Option<MessageSender>>>,
     pub(crate) abort_handle: Arc<Mutex<Option<AbortHandle>>>,

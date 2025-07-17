@@ -1,4 +1,4 @@
-use serde_json::Error;
+use serde_json::{Error, json};
 use std::fmt::{Display, Formatter};
 
 use crate::errors::*;
@@ -16,7 +16,67 @@ pub enum ApiError {
     Unknown(String),
     InvalidType { expected: String, found: String },
 }
-
+impl ApiError {
+    pub fn mask_sensitive_data(&mut self, properties: &[&str]) {
+        match self {
+            ApiError::TooManyRequests(req_err) => req_err.mask_sensitive_data(properties),
+            ApiError::RequestError(req_err) => req_err.mask_sensitive_data(properties),
+            ApiError::Unauthorized(req_err) => req_err.mask_sensitive_data(properties),
+            ApiError::ParsingError(req_err, _) => req_err.mask_sensitive_data(properties),
+            ApiError::NotFound(req_err) => req_err.mask_sensitive_data(properties),
+            ApiError::BadRequest(req_err) => req_err.mask_sensitive_data(properties),
+            ApiError::InvalidCredentials(req_err) => req_err.mask_sensitive_data(properties),
+            ApiError::Forbidden(req_err) => req_err.mask_sensitive_data(properties),
+            ApiError::Unknown(_) | ApiError::InvalidType { .. } => {}
+        }
+    }
+    pub fn to_json(&self) -> serde_json::Value {
+        match self {
+            ApiError::TooManyRequests(req_err) => json!({
+                "type": "TooManyRequests",
+                "error": req_err,
+            }),
+            ApiError::RequestError(req_err) => json!({
+                "type": "RequestError",
+                "error": req_err,
+            }),
+            ApiError::Unauthorized(req_err) => json!({
+                "type": "Unauthorized",
+                "error": req_err,
+            }),
+            ApiError::ParsingError(req_err, parse_err) => json!({
+                "type": "ParsingError",
+                "error": req_err,
+                "parse_error": parse_err.to_string(),
+            }),
+            ApiError::NotFound(req_err) => json!({
+                "type": "NotFound",
+                "error": req_err,
+            }),
+            ApiError::BadRequest(req_err) => json!({
+                "type": "BadRequest",
+                "error": req_err,
+            }),
+            ApiError::InvalidCredentials(req_err) => json!({
+                "type": "InvalidCredentials",
+                "error": req_err,
+            }),
+            ApiError::Forbidden(req_err) => json!({
+                "type": "Forbidden",
+                "error": req_err,
+            }),
+            ApiError::Unknown(_) => json!({
+                "type": "Unknown",
+                "message": "An unknown error occurred."
+            }),
+            ApiError::InvalidType { expected, found } => json!({
+                "type": "InvalidType",
+                "expected": expected,
+                "found": found,
+            }),
+        }
+    }
+}
 impl Display for ApiError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {

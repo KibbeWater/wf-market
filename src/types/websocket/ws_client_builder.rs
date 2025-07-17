@@ -224,6 +224,7 @@ impl WsClientBuilder {
                         }
 
                         Err(err) => {
+                            // Send connection message to the router
                             eprintln!("WebSocket connection failed: {}", err);
                             tokio::time::sleep(Duration::from_secs(5)).await;
                         }

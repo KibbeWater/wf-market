@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{enums::ApiVersion, errors::ResponseError, utils::mask_sensitive_data};
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RequestError {
     pub status_code: u16,
     pub version: ApiVersion,
