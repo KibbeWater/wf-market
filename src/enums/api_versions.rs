@@ -1,6 +1,6 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ApiVersion {
     V1,
     V2,
@@ -15,6 +15,7 @@ impl ApiVersion {
     }
     pub fn websocket_url(&self) -> &'static str {
         match self {
+            // ApiVersion::V1 => "ws://localhost:7369",
             ApiVersion::V1 => "wss://warframe.market/socket?platform=pc",
             ApiVersion::V2 => "wss://warframe.market/socket-v2",
         }

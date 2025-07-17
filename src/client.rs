@@ -361,6 +361,7 @@ impl Client<Unauthenticated> {
         &self,
         token: String,
         device_id: String,
+        refresh: bool,
     ) -> Result<Client<Authenticated>, ApiError> {
         let client = Client::<Authenticated> {
             self_arc: OnceLock::new(),
@@ -389,9 +390,11 @@ impl Client<Unauthenticated> {
         arc.self_arc.set(arc.clone()).unwrap();
 
         // Refresh the internal data
-        match arc.refresh().await {
-            Ok(_) => {}
-            Err(e) => return Err(e),
+        if refresh {
+            match arc.refresh().await {
+                Ok(_) => {}
+                Err(e) => return Err(e),
+            }
         }
         // Copy routes if they were initialized
         if let Some(manifest) = self.manifest_route.get() {
@@ -479,7 +482,7 @@ impl Client<Unauthenticated> {
         };
 
         let new_client = self
-            .create_authenticated_client(token, device_id.to_string())
+            .create_authenticated_client(token, device_id.to_string(), true)
             .await?;
         match new_client.refresh().await {
             Ok(_) => {}
@@ -487,6 +490,15 @@ impl Client<Unauthenticated> {
         }
         Ok(new_client)
     }
+
+    /**
+     * Creates a new `Client` with the specified token and device ID.
+     * # Arguments
+     * - `token`: The JWT token to use for authentication
+     * - `device_id`: The device ID to use for authentication
+     * # Returns
+     * A `Result` containing the authenticated `Client` or an `ApiError` if the token is invalid.
+     */
     pub async fn login_with_token(
         self,
         token: &str,
@@ -500,7 +512,7 @@ impl Client<Unauthenticated> {
         }
 
         let new_client = self
-            .create_authenticated_client(token.to_string(), device_id.to_string())
+            .create_authenticated_client(token.to_string(), device_id.to_string(), true)
             .await?;
         match new_client.refresh().await {
             Ok(_) => {}
@@ -511,6 +523,28 @@ impl Client<Unauthenticated> {
 }
 
 impl Client<Authenticated> {
+    /**
+     * Creates a new `Client` with the specified parameters.
+     * # Arguments
+     * - `token`: The JWT token to use for authentication
+     * - `device_id`: The device ID to use for authentication
+     * # Returns
+     * A `Client` with the specified token and device ID.
+     */
+    pub async fn new_default(
+        token: &str,
+        device_id: &str,
+    ) -> Result<Client<Authenticated>, ApiError> {
+        let ua_client = Client::<Unauthenticated>::new();
+        match ua_client
+            .create_authenticated_client(token.to_string(), device_id.to_string(), false)
+            .await
+        {
+            Ok(client) => Ok(client),
+            Err(e) => panic!("Failed to create authenticated client: {}", e),
+        }
+    }
+
     /**
      * Returns the current user data
      * # Returns
@@ -536,6 +570,16 @@ impl Client<Authenticated> {
         self.token.clone()
     }
     /**
+    Set the authentication token
+    # Arguments
+    - `token`: The token to set for the client
+    # Returns
+    The client with the token set
+    */
+    pub fn set_token(&mut self, token: String) {
+        self.token = token;
+    }
+    /**
     Create a WebSocket builder
 
     # Returns
@@ -554,7 +598,16 @@ impl Client<Authenticated> {
         // Again, panics, cosmic particle, you get the gist of it now
         self.device_id.clone()
     }
-
+    /**
+    Set the device ID for the client
+    # Arguments
+    - `device_id`: The device ID to set for the client
+    # Returns
+    The client with the device ID set
+    */
+    pub fn set_device_id(&mut self, device_id: String) {
+        self.device_id = device_id;
+    }
     /**
     Returns the current internal data
     # Returns
