@@ -12,7 +12,7 @@ use crate::{
 
 #[derive(Debug)]
 pub struct OrderRoute<State> {
-    orders: Mutex<Vec<Order>>,
+    orders: Mutex<OrderList<Order>>,
     client: Weak<Client<State>>,
 }
 
@@ -23,7 +23,7 @@ impl<State: Clone + 'static> OrderRoute<State> {
      */
     pub fn new(client: Arc<Client<State>>) -> Arc<Self> {
         Arc::new(Self {
-            orders: Mutex::new(Vec::new()),
+            orders: Mutex::new(OrderList::new(vec![])),
             client: Arc::downgrade(&client),
         })
     }
@@ -170,9 +170,23 @@ impl<State> OrderRoute<State>
 where
     State: IsAuthenticated + Clone + 'static,
 {
-    pub fn orders(&self) -> Vec<Order> {
+    /**
+    Get the current orders from the cache.
+    # Returns
+    - `Vec<Order>`: A vector of orders currently stored in the cache.
+    */
+    pub fn cache_orders(&self) -> OrderList<Order> {
         let ca_orders = self.orders.lock().unwrap();
         ca_orders.clone()
+    }
+
+    /**
+    Get a mutable reference to the current orders from the cache.
+    # Returns
+    - `std::sync::MutexGuard<OrderList<Order>>`: A mutable reference to the cached orders.
+    */
+    pub fn cache_orders_mut(&self) -> std::sync::MutexGuard<OrderList<Order>> {
+        self.orders.lock().unwrap()
     }
     /**
     Get the authenticated users orders
@@ -195,10 +209,10 @@ where
             .await
         {
             Ok((orders, _, _)) => {
+                let orders = OrderList::new(orders.data);
                 let mut ca_orders = self.orders.lock().unwrap();
-                ca_orders.clear();
-                ca_orders.extend(orders.data.clone());
-                Ok(OrderList::new(orders.data))
+                *ca_orders = orders.clone();
+                Ok(orders)
             }
             Err(e) => {
                 return Err(e);
@@ -230,14 +244,7 @@ where
         {
             Ok((existing_order, _, _)) => {
                 let mut ca_orders = self.orders.lock().unwrap();
-                if let Some(index) = ca_orders
-                    .iter()
-                    .position(|o| o.id == existing_order.data.id)
-                {
-                    ca_orders[index] = existing_order.data.clone();
-                } else {
-                    ca_orders.push(existing_order.data.clone());
-                }
+                ca_orders.update(order_id, args);
                 return Ok(existing_order.data);
             }
             Err(e) => {
@@ -267,9 +274,10 @@ where
             .await
         {
             Ok((new_order, _, _)) => {
+                let order = new_order.data;
                 let mut ca_orders = self.orders.lock().unwrap();
-                ca_orders.push(new_order.data.clone());
-                return Ok(new_order.data);
+                ca_orders.add(order.clone());
+                return Ok(order);
             }
             Err(e) => {
                 return Err(e);
@@ -305,16 +313,10 @@ where
             .await
         {
             Ok((transaction, _, _)) => {
+                let transaction = transaction.data;
                 let mut ca_orders = self.orders.lock().unwrap();
-                if let Some(index) = ca_orders.iter().position(|o| o.id == order_id) {
-                    let current_quantity = ca_orders[index].quantity;
-                    if quantity > current_quantity {
-                        ca_orders.remove(index);
-                    } else {
-                        ca_orders[index].quantity -= quantity;
-                    }
-                }
-                Ok(transaction.data)
+                ca_orders.close_order(order_id, quantity);
+                Ok(transaction)
             }
             Err(e) => {
                 return Err(e);
@@ -330,8 +332,9 @@ where
      * - `Ok(Order)` if the order was successfully deleted
      * - `Err(ApiError)` if there was an error deleting the order
      */
-    pub async fn delete(&self, order_id: &str) -> Result<Order, ApiError> {
+    pub async fn delete(&self, order_id: impl Into<String>) -> Result<Order, ApiError> {
         let client = self.client.upgrade().expect("Client should not be dropped");
+        let order_id = order_id.into();
 
         match client
             .as_ref()
@@ -346,7 +349,7 @@ where
         {
             Ok((order, _, _)) => {
                 let mut ca_orders = self.orders.lock().unwrap();
-                ca_orders.retain(|o| o.id != order.data.id);
+                ca_orders.remove_by_id(&order.data.id);
                 return Ok(order.data);
             }
             Err(e) => {
