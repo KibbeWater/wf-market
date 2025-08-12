@@ -97,6 +97,7 @@ impl<State: Clone + 'static> Client<State> {
         headers: Option<HashMap<String, String>>,
     ) -> Result<(T, HeaderMap, RequestError), ApiError> {
         let url = version.api_url().to_owned() + path;
+        println!("Calling API: {} {}", method, url);
         let mut default_headers = reqwest::header::HeaderMap::new();
 
         // Create the error object for logging
@@ -274,6 +275,7 @@ impl<State: Clone + 'static> Client<State> {
         self.crossplay = crossplay;
         self
     }
+
     // Endpoint methods to access routes
     pub fn manifest(&self) -> Arc<ManifestRoute<State>> {
         self.manifest_route
@@ -484,10 +486,6 @@ impl Client<Unauthenticated> {
         let new_client = self
             .create_authenticated_client(token, device_id.to_string(), true)
             .await?;
-        match new_client.refresh().await {
-            Ok(_) => {}
-            Err(e) => return Err(e),
-        }
         Ok(new_client)
     }
 
@@ -605,8 +603,8 @@ impl Client<Authenticated> {
     # Returns
     The client with the device ID set
     */
-    pub fn set_device_id(&mut self, device_id: String) {
-        self.device_id = device_id;
+    pub fn set_device_id(&mut self, device_id: &str) {
+        self.device_id = device_id.to_string();
     }
     /**
     Returns the current internal data
@@ -615,6 +613,10 @@ impl Client<Authenticated> {
     */
     pub async fn refresh(&self) -> Result<String, ApiError> {
         match self.user().me().await {
+            Ok(_) => {}
+            Err(e) => return Err(e),
+        }
+        match self.order().my_orders().await {
             Ok(_) => {}
             Err(e) => return Err(e),
         }
