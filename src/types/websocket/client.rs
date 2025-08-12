@@ -16,21 +16,14 @@ pub struct WsClient {
 }
 
 impl WsClient {
-    pub(crate) fn send_disconnect_message(
+    pub(crate) fn send_ws_message(
         router: &Router,
         message: &WsMessage,
         sender: &MessageSender,
     ) -> Result<(), WsError> {
         router.route_message(&message, sender)
     }
-    pub(crate) fn send_connect_message(
-        router: &Router,
-        sender: &MessageSender,
-        version: ApiVersion,
-    ) -> Result<(), WsError> {
-        let message = WsMessage::connect(version);
-        router.route_message(&message, sender)
-    }
+
     pub(crate) fn handle_text_message(
         router: &Router,
         text: &str,

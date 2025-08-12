@@ -59,6 +59,7 @@ impl WsClientBuilder {
         let should_stop = Arc::new(AtomicBool::new(false));
 
         tokio::spawn({
+            let retry_interval = Duration::from_secs(5);
             let should_stop_spawn = Arc::clone(&should_stop);
             let sender_holder = Arc::clone(&sender_holder);
             let router = Arc::clone(&router);
@@ -93,8 +94,12 @@ impl WsClientBuilder {
                             };
 
                             // Send connection message to the router
-                            WsClient::send_connect_message(&router, &sender, version.clone())
-                                .unwrap();
+                            WsClient::send_ws_message(
+                                &router,
+                                &WsMessage::connect(version.clone()),
+                                &sender,
+                            )
+                            .unwrap();
 
                             // Send authentication
                             if version == &ApiVersion::V2 {
@@ -210,13 +215,18 @@ impl WsClientBuilder {
                                 "Manual disconnect"
                             } else {
                                 &format!(
-                                    "Connection lost: {:?} will retry in 5 seconds",
-                                    ws_error.lock().unwrap()
+                                    "Connection lost: {:?} will retry in {} seconds",
+                                    ws_error.lock().unwrap(),
+                                    retry_interval.as_secs()
                                 )
                             };
-                            WsClient::send_disconnect_message(
+                            WsClient::send_ws_message(
                                 &router,
-                                &WsMessage::disconnect(reason, self.version.clone()),
+                                &WsMessage::disconnect(
+                                    reason,
+                                    retry_interval.as_secs(),
+                                    self.version.clone(),
+                                ),
                                 &sender,
                             )
                             .unwrap();
@@ -224,8 +234,26 @@ impl WsClientBuilder {
                         }
 
                         Err(err) => {
-                            // Send connection message to the router
                             eprintln!("WebSocket connection failed: {}", err);
+                            // Send connection failed message to the router
+                            let failed_message = WsMessage::reconnect(
+                                retry_interval.as_secs(),
+                                err,
+                                self.version.clone(),
+                            )
+                            .with_id("INTERNAL");
+
+                            // Create a temporary sender for the error message
+                            let (temp_tx, _temp_rx) = mpsc::unbounded_channel::<WsMessage>();
+                            let temp_sender = MessageSender {
+                                version: self.version.clone(),
+                                tx: temp_tx,
+                            };
+
+                            if let Err(e) = router.route_message(&failed_message, &temp_sender) {
+                                eprintln!("Failed to route connection failed message: {:?}", e);
+                            }
+
                             tokio::time::sleep(Duration::from_secs(5)).await;
                         }
                     }

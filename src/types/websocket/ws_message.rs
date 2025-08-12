@@ -35,10 +35,22 @@ impl WsMessage {
         )
         .with_id("INTERNAL")
     }
-    pub fn disconnect(error: &str, version: ApiVersion) -> Self {
+    pub fn disconnect(error: &str, retry_interval: u64, version: ApiVersion) -> Self {
         WsMessage::new(
             "@internal|internal/disconnected",
-            Some(json!({"reason": error})),
+            Some(json!({"reason": error, "retry_interval": retry_interval})),
+            version,
+        )
+        .with_id("INTERNAL")
+    }
+    pub fn reconnect(
+        retry_interval: u64,
+        error: tokio_tungstenite::tungstenite::error::Error,
+        version: ApiVersion,
+    ) -> Self {
+        WsMessage::new(
+            "@internal|internal/reconnecting",
+            Some(json!({"status": "reconnecting", "retry_interval": retry_interval, "error": error.to_string()})),
             version,
         )
         .with_id("INTERNAL")
