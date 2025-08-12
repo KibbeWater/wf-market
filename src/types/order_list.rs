@@ -17,10 +17,11 @@ pub struct OrderList<State = Order> {
 // Trait to abstract over Order and OrderWithUser
 pub trait OrderLike {
     fn order_type(&self) -> OrderType;
-    fn platinum(&self) -> u32;
+    fn platinum(&self) -> i64;
     fn to_order(&self) -> Order;
     fn user(&self) -> Option<UserShort>;
     fn sub_type(&self) -> &SubType;
+    fn update(&mut self, args: UpdateOrderParams);
 }
 
 // Implement trait for Order
@@ -29,8 +30,8 @@ impl OrderLike for Order {
         self.order_type
     }
 
-    fn platinum(&self) -> u32 {
-        self.platinum
+    fn platinum(&self) -> i64 {
+        self.platinum as i64
     }
 
     fn to_order(&self) -> Order {
@@ -44,6 +45,24 @@ impl OrderLike for Order {
     fn sub_type(&self) -> &SubType {
         &self.subtype
     }
+    fn update(&mut self, args: UpdateOrderParams) {
+        if let Some(platinum) = args.platinum {
+            self.platinum = platinum;
+        }
+        if let Some(quantity) = args.quantity {
+            self.quantity = quantity;
+        }
+
+        if let Some(per_trade) = args.per_trade {
+            self.per_trade = Some(per_trade as u8);
+        }
+        if let Some(rank) = args.rank {
+            self.subtype.rank = Some(rank as i64);
+        }
+        if let Some(visible) = args.visible {
+            self.visible = visible;
+        }
+    }
 }
 
 // Implement trait for OrderWithUser
@@ -52,8 +71,8 @@ impl OrderLike for OrderWithUser {
         self.order.order_type
     }
 
-    fn platinum(&self) -> u32 {
-        self.order.platinum
+    fn platinum(&self) -> i64 {
+        self.order.platinum as i64
     }
 
     fn to_order(&self) -> Order {
@@ -64,6 +83,9 @@ impl OrderLike for OrderWithUser {
     }
     fn sub_type(&self) -> &SubType {
         &self.order.subtype
+    }
+    fn update(&mut self, args: UpdateOrderParams) {
+        self.order.update(args);
     }
 }
 
@@ -82,12 +104,22 @@ impl<State: OrderLike + Clone> OrderList<State> {
             .cloned()
             .collect();
         sell_orders.sort_by(|a, b| a.platinum().cmp(&b.platinum()));
-
         OrderList {
             sell_orders,
             buy_orders,
             _state: PhantomData,
         }
+    }
+
+    /*
+    Sort the orders by platinum price.
+    This method sorts the sell orders in ascending order and the buy orders in descending order.
+    */
+    pub fn sort_by_platinum(&mut self) {
+        self.sell_orders
+            .sort_by(|a, b| a.platinum().cmp(&b.platinum()));
+        self.buy_orders
+            .sort_by(|a, b| b.platinum().cmp(&a.platinum()));
     }
 
     /*
@@ -108,17 +140,41 @@ impl<State: OrderLike + Clone> OrderList<State> {
     pub fn total_orders(&self) -> usize {
         self.sell_orders.len() + self.buy_orders.len()
     }
+
+    /*
+    Find an order by its ID and subtype.
+    # Arguments
+    - id: impl Into<String>: The item ID to search for.
+    - sub_type: Option<SubType>: The subtype of the order to find. If None, defaults to SubType::default().
+    - order_type: OrderType: The type of order to find (Sell or Buy).
+    */
+    pub fn find_order(
+        &self,
+        id: impl Into<String>,
+        sub_type: SubType,
+        order_type: OrderType,
+    ) -> Option<State> {
+        let id = id.into();
+        match order_type {
+            OrderType::Sell => self
+                .sell_orders
+                .iter()
+                .find(|o| o.to_order().item_id == id && o.to_order().sub_type() == &sub_type)
+                .cloned(),
+            OrderType::Buy => self
+                .buy_orders
+                .iter()
+                .find(|o| o.to_order().item_id == id && o.to_order().sub_type() == &sub_type)
+                .cloned(),
+        }
+    }
+
     /*
     Filter orders by subtype.
     # Arguments
     - sub_type: Option<SubType>: The subtype to filter by. If None, it defaults to SubType::default().
     */
-    pub fn filter_by_sub_type(&mut self, sub_type: Option<SubType>, exclude: bool) {
-        let sub_type = match sub_type {
-            Some(st) => st,
-            None => SubType::default(), // If no subtype is provided, use default
-        };
-
+    pub fn filter_by_sub_type(&mut self, sub_type: SubType, exclude: bool) {
         if exclude {
             self.sell_orders.retain(|o| *o.sub_type() != sub_type);
             self.buy_orders.retain(|o| *o.sub_type() != sub_type);
@@ -154,9 +210,9 @@ impl<State: OrderLike + Clone> OrderList<State> {
     # Arguments
     - order_type: OrderType: The type of order to get the lowest price for (Sell or Buy).
     # Returns
-    - u32: The lowest price of the specified order type. If no orders exist, returns 0.
+    - i64: The lowest price of the specified order type. If no orders exist, returns 0.
     */
-    pub fn lowest_price(&self, order_type: OrderType) -> u32 {
+    pub fn lowest_price(&self, order_type: OrderType) -> i64 {
         self.lowest_order(order_type)
             .map(|o| o.platinum())
             .unwrap_or(0)
@@ -187,9 +243,9 @@ impl<State: OrderLike + Clone> OrderList<State> {
     # Arguments
     - order_type: OrderType: The type of order to get the highest price for (Sell or Buy).
     # Returns
-    - u32: The highest price of the specified order type. If no orders exist, returns 0.
+    - i64: The highest price of the specified order type. If no orders exist, returns 0.
     */
-    pub fn highest_price(&self, order_type: OrderType) -> u32 {
+    pub fn highest_price(&self, order_type: OrderType) -> i64 {
         self.highest_order(order_type)
             .map(|o| o.platinum())
             .unwrap_or(0)
@@ -199,9 +255,9 @@ impl<State: OrderLike + Clone> OrderList<State> {
     # Arguments
     - order_type: OrderType: The type of order to get the price range for (Sell or Buy).
     # Returns
-    - u32: The price range for the specified order type. If no orders exist, returns 0.
+    - i64: The price range for the specified order type. If no orders exist, returns 0.
     */
-    pub fn price_range(&self, order_type: OrderType) -> u32 {
+    pub fn price_range(&self, order_type: OrderType) -> i64 {
         let lowest_price = self.lowest_price(OrderType::Sell);
         let highest_price = self.highest_price(OrderType::Buy);
         if order_type == OrderType::Sell {
@@ -231,7 +287,8 @@ impl<State: OrderLike + Clone> OrderList<State> {
     # Arguments
     - id: &str: The ID of the order to remove.
     */
-    pub fn remove_by_id(&mut self, id: &str) {
+    pub fn remove_by_id(&mut self, id: impl Into<String>) {
+        let id = id.into();
         self.sell_orders.retain(|o| o.to_order().id != id);
         self.buy_orders.retain(|o| o.to_order().id != id);
     }
@@ -242,24 +299,96 @@ impl<State: OrderLike + Clone> OrderList<State> {
     - order_id: &str: The ID of the order to update.
     - args: UpdateOrderParams: The parameters to update the order with.
     */
-    pub fn update(&mut self, order_id: &str, args: UpdateOrderParams) {
-        // let mut orders = self.buy_orders
-        //     .iter_mut()
-        //     .chain(self.sell_orders.iter_mut());
-        // let index = orders.position(|o| o.to_order().id == order_id);
-        // if let Some(index) = index {
-        //     if let Some(order) = orders.nth(index) {
-        //         if let Some(platinum) = args.platinum {
-        //             order.to_order().platinum = platinum;
-        //         }
-        //         if let Some(subtype) = args.subtype {
-        //             order.to_order().subtype = subtype;
-        //         }
-        //         if let Some(order_type) = args.order_type {
-        //             order.to_order().order_type = order_type;
-        //         }
-        //     }
-        // }
+    pub fn update(&mut self, order_id: impl Into<String>, args: UpdateOrderParams) {
+        let order_id = order_id.into();
+        println!("Updating order with ID: {}", order_id);
+
+        // First check buy orders
+        for order in &mut self.buy_orders {
+            if order.to_order().id == order_id {
+                println!("Found buy order to update: {:?}", order.to_order().id);
+                order.update(args);
+                return;
+            }
+        }
+
+        // Then check sell orders
+        for order in &mut self.sell_orders {
+            if order.to_order().id == order_id {
+                println!("Found sell order to update: {:?}", order.to_order().id);
+                order.update(args);
+                return;
+            }
+        }
+
+        println!("Order with ID {} not found", order_id);
+    }
+    /*
+    Close an order by its ID.
+    # Arguments
+    - order_id: &str: The ID of the order to close.
+    - quantity: u32: The quantity to close. If 0, closes the entire order.
+     */
+    pub fn close_order(&mut self, order_id: impl Into<String>, quantity: u32) {
+        let order_id = order_id.into();
+        let mut remove_buy = false;
+        let mut remove_sell = false;
+
+        // First check buy orders
+        for order in &mut self.buy_orders {
+            if order.to_order().id == order_id {
+                if order.to_order().quantity < quantity {
+                    remove_buy = true;
+                } else {
+                    order.update(
+                        UpdateOrderParams::new()
+                            .with_quantity(order.to_order().quantity - quantity),
+                    );
+                }
+                break;
+            }
+        }
+
+        // Then check sell orders
+        for order in &mut self.sell_orders {
+            if order.to_order().id == order_id {
+                if order.to_order().quantity < quantity {
+                    remove_sell = true;
+                } else {
+                    order.update(
+                        UpdateOrderParams::new()
+                            .with_quantity(order.to_order().quantity - quantity),
+                    );
+                }
+                break;
+            }
+        }
+
+        if remove_buy || remove_sell {
+            self.remove_by_id(order_id);
+        }
+    }
+
+    /*
+    Get a list of order IDs for a specific order type.
+    # Arguments
+    - order_type: OrderType: The type of order to get IDs for (Sell or Buy).
+    # Returns
+    - Vec<String>: A vector of order IDs for the specified order type.
+     */
+    pub fn order_ids(&self, order_type: OrderType) -> Vec<String> {
+        match order_type {
+            OrderType::Sell => self
+                .sell_orders
+                .iter()
+                .map(|o| o.to_order().id.clone())
+                .collect(),
+            OrderType::Buy => self
+                .buy_orders
+                .iter()
+                .map(|o| o.to_order().id.clone())
+                .collect(),
+        }
     }
 }
 
@@ -289,7 +418,8 @@ impl OrderList<OrderWithUser> {
     - name: &str: The username to filter by.
     - exclude: bool: If true, excludes orders with the specified username; otherwise, includes
     */
-    pub fn filter_username(&mut self, name: &str, exclude: bool) {
+    pub fn filter_username(&mut self, name: impl Into<String>, exclude: bool) {
+        let name = name.into();
         if exclude {
             self.sell_orders
                 .retain(|o| o.user().map_or(true, |u| u.name != name));

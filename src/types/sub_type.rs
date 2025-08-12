@@ -8,15 +8,15 @@ pub struct SubType {
 
     // MODS
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub rank: Option<u8>, // Rank of the mod, if applicable
+    pub rank: Option<i64>, // Rank of the mod, if applicable
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub charges: Option<u8>, // Charges remaining (Requiem mods)
+    pub charges: Option<i64>, // Charges remaining (Requiem mods)
 
     // AYATAN SCULPTURES
     #[serde(rename = "amberStars", skip_serializing_if = "Option::is_none")]
-    pub amber_stars: Option<u8>, // Number of Amber Stars, if applicable
+    pub amber_stars: Option<i64>, // Number of Amber Stars, if applicable
     #[serde(rename = "cyanStars", skip_serializing_if = "Option::is_none")]
-    pub cyan_stars: Option<u8>, // Number of Cyan Stars, if applicable
+    pub cyan_stars: Option<i64>, // Number of Cyan Stars, if applicable
 }
 impl Default for SubType {
     fn default() -> Self {
@@ -38,7 +38,22 @@ impl Hash for SubType {
     }
 }
 impl SubType {
-    pub fn parazon_mod(charges: u8) -> Self {
+    pub fn new(
+        subtype: Option<String>,
+        rank: Option<i64>,
+        charges: Option<i64>,
+        amber_stars: Option<i64>,
+        cyan_stars: Option<i64>,
+    ) -> Self {
+        SubType {
+            subtype,
+            rank,
+            charges,
+            amber_stars,
+            cyan_stars,
+        }
+    }
+    pub fn parazon_mod(charges: i64) -> Self {
         SubType {
             subtype: None,
             rank: None,
@@ -47,7 +62,7 @@ impl SubType {
             cyan_stars: None,
         }
     }
-    pub fn mods(rank: u8) -> Self {
+    pub fn mods(rank: i64) -> Self {
         SubType {
             subtype: None,
             rank: Some(rank),
@@ -56,7 +71,7 @@ impl SubType {
             cyan_stars: None,
         }
     }
-    pub fn ayatan_sculpture(amber_stars: u8, cyan_stars: u8) -> Self {
+    pub fn ayatan_sculpture(amber_stars: i64, cyan_stars: i64) -> Self {
         SubType {
             subtype: None,
             rank: None,
@@ -74,11 +89,21 @@ impl SubType {
             cyan_stars: None,
         }
     }
+    pub fn is_empty(&self) -> bool {
+        self.subtype.is_none()
+            && self.rank.is_none()
+            && self.charges.is_none()
+            && self.amber_stars.is_none()
+            && self.cyan_stars.is_none()
+    }
 }
 impl Display for SubType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if let Some(rank) = self.rank {
             write!(f, "Rank: {} ", rank)?;
+        }
+        if let Some(charges) = self.charges {
+            write!(f, "Charges: {} ", charges)?;
         }
         if let Some(subtype) = &self.subtype {
             write!(f, "Subtype: {} ", subtype)?;
