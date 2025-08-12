@@ -28,16 +28,16 @@ async fn recent() {
 
     match client.order().recent().await {
         Ok(recent) => {
-            println!(
-                "✅ Successfully fetched recent orders: {} total",
-                recent.len()
-            );
-            if !recent.is_empty() {
-                println!(
-                    "   First order: {} - {} platinum",
-                    recent[0].order.id, recent[0].order.platinum
-                );
-            }
+            // println!(
+            //     "✅ Successfully fetched recent orders: {} total",
+            //     recent.len()
+            // );
+            // if !recent.is_empty() {
+            //     println!(
+            //         "   First order: {} - {} platinum",
+            //         recent[0].order.id, recent[0].order.platinum
+            //     );
+            // }
         }
         Err(e) => {
             eprintln!("💥 Failed to fetch recent orders: {:?}", e);
@@ -53,7 +53,7 @@ async fn get_orders_by_item() {
 
     match client.order().get_orders_by_item(slug).await {
         Ok(mut orders) => {
-            orders.filter_by_sub_type(Some(SubType::mods(10)), false);
+            orders.filter_by_sub_type(SubType::mods(10), false);
             orders.filter_user_status(StatusType::InGame, false);
             println!(
                 "✅ Lowest sell order price for '{}': {} platinum",
@@ -192,19 +192,27 @@ async fn my_orders() {
 
 #[tokio::test]
 async fn update_order() {
-    let id = "685b118413559c82fc63b7d8"; // Order ID to update
+    let id = "68992b99c7c642505205d926"; // Order ID to update
 
     match setup_client().await {
         Ok(client) => {
             match client
                 .order()
-                .update(id, UpdateOrderParams::new().with_platinum(999))
+                .update(id, UpdateOrderParams::new().with_platinum(12))
                 .await
             {
                 Ok(order) => {
                     println!("✅ Successfully updated order: {}", order.id);
                     println!("   New price: {} platinum", order.platinum);
-                    println!("   Cached orders: {}", client.order().orders().len());
+                    println!(
+                        "   Cached orders: {}",
+                        client.order().cache_orders().total_orders()
+                    );
+                    crate::utils::write_json_file(
+                        "updated_order.json",
+                        &json!(client.order().cache_orders()),
+                    )
+                    .expect("Failed to write updated order to file");
                 }
                 Err(e) => {
                     eprintln!("💥 Failed to update order '{}': {:?}", id, e);
@@ -221,7 +229,7 @@ async fn update_order() {
 
 #[tokio::test]
 async fn create_regular_order() {
-    let id = "563893fcb66f83093e823472"; // Secura Dual Cestra Item ID
+    let id = "653060f332327ba8746da745"; // Secura Dual Cestra Item ID
 
     match setup_client().await {
         Ok(client) => {
@@ -229,12 +237,12 @@ async fn create_regular_order() {
                 .order()
                 .create(CreateOrderParams::new_with_subtype(
                     id,
-                    OrderType::Buy,
+                    OrderType::Sell,
                     10,
-                    1,
+                    5,
                     true,
                     None,
-                    SubType::mods(10),
+                    SubType::default(),
                 ))
                 .await
             {
@@ -260,7 +268,7 @@ async fn create_regular_order() {
 
 #[tokio::test]
 async fn close_order() {
-    let id = "685b24e313559c82fc63b7d9"; // Order ID to close
+    let id = "68993213a57e82e4a14a7e2e"; // Order ID to close
 
     match setup_client().await {
         Ok(client) => {
@@ -272,8 +280,13 @@ async fn close_order() {
                         println!("   Response: {:?}", response);
                         println!(
                             "   Remaining cached orders: {}",
-                            client.order().orders().len()
+                            client.order().cache_orders().total_orders()
                         );
+                        crate::utils::write_json_file(
+                            "closed_order.json",
+                            &json!(client.order().cache_orders()),
+                        )
+                        .expect("Failed to write closed order to file");
                     }
                     Err(e) => {
                         eprintln!("💥 Failed to close order '{}': {:?}", id, e);
