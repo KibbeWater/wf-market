@@ -16,7 +16,6 @@ pub struct AuctionFilter {
     pub re_rolls_min: Option<u32>,
     pub re_rolls_max: Option<u32>,
     pub buyout_policy: Option<String>,
-    pub mod_rank: Option<String>,
 
     #[serde(skip)]
     pub user_activity: Option<StatusType>,
@@ -36,18 +35,17 @@ impl AuctionFilter {
             re_rolls_min: None,
             re_rolls_max: None,
             buyout_policy: None,
-            mod_rank: None,
             user_activity: None,
         }
     }
 
-    pub fn with_positive_stats<S: Into<String>>(mut self, positive_stats: S) -> Self {
-        self.positive_stats = Some(positive_stats.into());
+    pub fn with_positive_stats(mut self, positive_stats: Vec<String>) -> Self {
+        self.positive_stats = Some(positive_stats.join(","));
         self
     }
 
-    pub fn with_negative_stats<S: Into<String>>(mut self, negative_stats: S) -> Self {
-        self.negative_stats = Some(negative_stats.into());
+    pub fn with_negative_stats(mut self, negative_stats: Vec<String>) -> Self {
+        self.negative_stats = Some(negative_stats.join(","));
         self
     }
 
@@ -83,11 +81,6 @@ impl AuctionFilter {
 
     pub fn with_buyout_policy<S: Into<String>>(mut self, buyout_policy: S) -> Self {
         self.buyout_policy = Some(buyout_policy.into());
-        self
-    }
-
-    pub fn with_mod_rank<S: Into<String>>(mut self, mod_rank: S) -> Self {
-        self.mod_rank = Some(mod_rank.into());
         self
     }
 

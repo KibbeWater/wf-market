@@ -1,8 +1,10 @@
 use crate::{
     Authenticated, Client,
+    endpoints::item,
     errors::ApiError,
     types::{
-        AuctionFilter, CreateAuctionItem, CreateAuctionParams, ItemAttribute, UpdateAuctionParams,
+        AuctionFilter, AuctionLike, CreateAuctionItem, CreateAuctionParams, ItemAttribute,
+        UpdateAuctionParams,
     },
 };
 use dotenv::dotenv;
@@ -25,21 +27,21 @@ async fn get_auctions() {
     let client = Client::new();
     let items = client.auction().get_recent_auctions().await.unwrap();
     // Loop through the items and print them
-    println!("Total Auctions: {}", items.len());
+    println!("Total Auctions: {}", items.total_auctions());
     // Print the first item for brevity
-    if items.is_empty() {
+    if items.auctions.is_empty() {
         println!("No auctions found.");
         return;
     }
-    for item in &items {
-        println!("Auction: {:?}", item.auction.note_raw);
+    for item in &items.auctions {
+        println!("Auction: {:?}", item.to_auction().note_raw);
     }
 }
 
 #[tokio::test]
 async fn search_auctions() {
     let client = Client::new();
-    let items = client
+    let mut items = client
         .auction()
         .search_auctions(
             AuctionFilter::new(crate::enums::AuctionType::Riven, "cortege")
@@ -47,15 +49,16 @@ async fn search_auctions() {
         )
         .await
         .unwrap();
+    items.filter_user_status(crate::enums::StatusType::InGame, false);
     // Loop through the items and print them
-    println!("Total Auctions: {}", items.len());
+    println!("Total Auctions: {}", items.total_auctions());
     // Print the first item for brevity
-    if items.is_empty() {
+    if items.auctions.is_empty() {
         println!("No auctions found.");
         return;
     }
-    for item in &items {
-        println!("Auction: {:?}", item.auction.note_raw);
+    for item in &items.auctions {
+        println!("Auction: {:?}", item.to_auction().note_raw);
     }
 }
 // Can Only Run on Authenticated Client
@@ -64,10 +67,16 @@ async fn search_auctions() {
 async fn my_auctions() {
     let client = setup_client().await.unwrap();
 
-    let auctions = client.auction().my_auctions().await.unwrap();
-    println!("My Auctions: {:?}", auctions.len());
-    for item in &auctions {
-        println!("Auction: {:?}", item.note_raw);
+    let auctions = client.auction().cache_auctions();
+    println!("My Auctions: {:?}", auctions.total_auctions());
+    println!("Highest Auction: {:?}", auctions.highest_auction());
+    println!("Lowest Auction: {:?}", auctions.lowest_auction());
+    for item in &auctions.auctions {
+        println!(
+            "Auction: {:?} | UUID: {:?}",
+            item.to_auction().note_raw,
+            item.to_auction().item.uuid()
+        );
     }
 }
 

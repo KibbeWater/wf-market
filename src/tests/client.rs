@@ -30,6 +30,6 @@ async fn login_with_token() {
         .login_with_token(&token, "default")
         .await
         .unwrap();
-    let recent = client.user().me().await.unwrap();
-    println!("My Orders: {:?}", recent);
+    // let recent = client.user().me().await.unwrap();
+    println!("My Orders: {:?}", client.auction().cache_auctions());
 }

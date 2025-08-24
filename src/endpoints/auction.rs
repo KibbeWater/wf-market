@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex, Weak};
+use std::{
+    path,
+    sync::{Arc, Mutex, Weak},
+};
 
 use reqwest::Method;
 use serde::de::Error;
@@ -9,11 +12,12 @@ use crate::{
     enums::*,
     errors::*,
     types::*,
+    utils::{read_json_file, write_json_file},
 };
 
 #[derive(Debug)]
 pub struct AuctionRoute<State> {
-    auctions_cache: Mutex<Vec<Auction>>,
+    auctions_cache: Mutex<AuctionList<Auction>>,
     client: Weak<Client<State>>,
 }
 
@@ -24,16 +28,35 @@ impl<State: Clone + 'static> AuctionRoute<State> {
      */
     pub fn new(client: Arc<Client<State>>) -> Arc<Self> {
         Arc::new(Self {
-            auctions_cache: Mutex::new(Vec::new()),
+            auctions_cache: Mutex::new(AuctionList::new(vec![])),
             client: Arc::downgrade(&client),
         })
     }
+    /**
+    Get the current auctions from the cache.
+    # Returns
+    - `AuctionList<Auction>`: A clone of the cached auctions.
+    */
+    pub fn cache_auctions(&self) -> AuctionList<Auction> {
+        let ca_auctions = self.auctions_cache.lock().unwrap();
+        ca_auctions.clone()
+    }
+
+    /**
+    Get a mutable reference to the current auctions from the cache.
+    # Returns
+    - `std::sync::MutexGuard<AuctionList<Auction>>`: A mutable reference to the cached auctions.
+    */
+    pub fn cache_auctions_mut(&self) -> std::sync::MutexGuard<AuctionList<Auction>> {
+        self.auctions_cache.lock().unwrap()
+    }
+
     /**
      * Returns the most recent auctions.
      * This method fetches the latest auctions from the server and caches them.
      * - Returns a `Result` containing a vector of `AuctionWithOwner` on success.
      */
-    pub async fn get_recent_auctions(&self) -> Result<Vec<AuctionWithOwner>, ApiError> {
+    pub async fn get_recent_auctions(&self) -> Result<AuctionList<AuctionWithOwner>, ApiError> {
         let client = self.client.upgrade().expect("Client should not be dropped");
 
         match client
@@ -48,9 +71,12 @@ impl<State: Clone + 'static> AuctionRoute<State> {
                         serde_json::Error::missing_field("auctions"),
                     )
                 })?;
-                let auctions = serde_json::from_value::<Vec<AuctionWithOwner>>(value.clone())
+                let mut auctions = serde_json::from_value::<Vec<AuctionWithOwner>>(value.clone())
                     .map_err(|e| ApiError::ParsingError(err, e))?;
-                Ok(auctions)
+                for auction in &mut auctions {
+                    auction.apply_uuid();
+                }
+                Ok(AuctionList::new(auctions))
             }
             Err(e) => {
                 return Err(e);
@@ -66,8 +92,21 @@ impl<State: Clone + 'static> AuctionRoute<State> {
     pub async fn search_auctions(
         &self,
         filter: AuctionFilter,
-    ) -> Result<Vec<AuctionWithOwner>, ApiError> {
+    ) -> Result<AuctionList<AuctionWithOwner>, ApiError> {
         let client = self.client.upgrade().expect("Client should not be dropped");
+
+        // Check if the path exists
+        let path = format!(
+            "C:\\Users\\Kenya\\AppData\\Local\\dev.kenya.quantframe\\logs\\static\\auctions_item_{}.json",
+            filter.weapon_url_name
+        );
+
+        if path::Path::new(&path).exists() {
+            // If the file exists, read it and return the cached data
+            if let Ok(data) = read_json_file(&path) {
+                return Ok(data);
+            }
+        }
 
         let query = serde_urlencoded::to_string(filter).map_err(|e| {
             ApiError::Unknown(format!("Failed to serialize auctions filter: {}", e))
@@ -93,7 +132,12 @@ impl<State: Clone + 'static> AuctionRoute<State> {
                 })?;
                 let auctions = serde_json::from_value::<Vec<AuctionWithOwner>>(value.clone())
                     .map_err(|e| ApiError::ParsingError(err, e))?;
-                Ok(auctions)
+                let list = AuctionList::new(auctions);
+                write_json_file(path, &json!(list)).map_err(|e| {
+                    eprintln!("Failed to write JSON file: {}", e);
+                    ApiError::Unknown("Failed to write JSON file".into())
+                })?;
+                Ok(list)
             }
             Err(e) => {
                 return Err(e);
@@ -120,9 +164,9 @@ where
     /**
      * Returns the cached auctions.
      * This method retrieves the cached auctions from the route.
-     * - Returns a `Result` containing a vector of `Auction` on success.
+     * - Returns `Result<AuctionList<Auction>, ApiError>`
      */
-    pub async fn my_auctions(&self) -> Result<Vec<Auction>, ApiError> {
+    pub async fn my_auctions(&self) -> Result<AuctionList<Auction>, ApiError> {
         let client = self.client.upgrade().expect("Client should not be dropped");
 
         let user = client.user().get_user()?;
@@ -144,10 +188,14 @@ where
                         serde_json::Error::missing_field("auctions"),
                     )
                 })?;
-                let auctions = serde_json::from_value::<Vec<Auction>>(value.clone())
+                let mut auctions = serde_json::from_value::<Vec<Auction>>(value.clone())
                     .map_err(|e| ApiError::ParsingError(err, e))?;
-                let mut cache = self.auctions_cache.lock().unwrap();
-                *cache = auctions.clone(); // Cache the auctions
+                for auction in &mut auctions {
+                    auction.apply_uuid();
+                }
+                let auctions = AuctionList::new(auctions.clone());
+                let mut ca_auctions = self.auctions_cache.lock().unwrap();
+                *ca_auctions = auctions.clone();
                 Ok(auctions)
             }
             Err(e) => {
@@ -178,11 +226,13 @@ where
                 let value = data.payload.get("auction").ok_or_else(|| {
                     ApiError::ParsingError(err.clone(), serde_json::Error::missing_field("auction"))
                 })?;
-                let auction = serde_json::from_value::<Auction>(value.clone())
+                let mut auction = serde_json::from_value::<Auction>(value.clone())
                     .map_err(|e| ApiError::ParsingError(err, e))?;
 
+                auction.apply_uuid();
+
                 let mut cache = self.auctions_cache.lock().unwrap();
-                cache.push(auction.clone());
+                cache.add(auction.clone());
                 Ok(auction)
             }
             Err(e) => {
@@ -218,14 +268,11 @@ where
                 let value = data.payload.get("auction").ok_or_else(|| {
                     ApiError::ParsingError(err.clone(), serde_json::Error::missing_field("auction"))
                 })?;
-                let auction = serde_json::from_value::<Auction>(value.clone())
+                let mut auction = serde_json::from_value::<Auction>(value.clone())
                     .map_err(|e| ApiError::ParsingError(err, e))?;
+                auction.apply_uuid();
                 let mut cache = self.auctions_cache.lock().unwrap();
-                if let Some(index) = cache.iter().position(|o| o.id == auction.id) {
-                    cache[index] = auction.clone();
-                } else {
-                    cache.push(auction.clone());
-                }
+                cache.update(auction.clone());
                 return Ok(auction);
             }
             Err(e) => {
@@ -268,7 +315,7 @@ where
                     )
                 })?;
                 let mut cache = self.auctions_cache.lock().unwrap();
-                cache.retain(|o| o.id != id_str);
+                cache.remove_by_id(id_str);
                 return Ok(id_str.to_string());
             }
             Err(e) => {

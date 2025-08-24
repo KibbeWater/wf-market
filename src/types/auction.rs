@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{enums::AuctionType, types::UserShort};
-
-#[derive(Deserialize, Clone, Debug, Default)]
+use uuid::Uuid;
+#[derive(Deserialize, Serialize, Clone, Debug, Default)]
 pub struct Auction {
     pub id: String,
     pub minimal_reputation: i32,
@@ -23,17 +23,34 @@ pub struct Auction {
     pub is_marked_for: Option<String>,
     pub marked_operation_at: Option<String>,
     pub item: AuctionItem,
+    #[serde(default)]
+    pub uuid: String,
+    pub properties: Option<serde_json::Value>, // Additional properties for the order
 }
-
-#[derive(Deserialize, Clone, Debug)]
+impl Auction {
+    pub fn apply_uuid(&mut self) {
+        if self.uuid.is_empty() {
+            self.uuid = self.item.uuid().to_string();
+        }
+    }
+    pub fn set_properties(mut self, properties: serde_json::Value) -> Self {
+        self.properties = Some(properties);
+        self
+    }
+}
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct AuctionWithOwner {
     #[serde(flatten)]
     pub auction: Auction,
 
     pub owner: UserShort,
 }
-
-#[derive(Deserialize, Clone, Debug, Default)]
+impl AuctionWithOwner {
+    pub fn apply_uuid(&mut self) {
+        self.auction.apply_uuid();
+    }
+}
+#[derive(Deserialize, Serialize, Clone, Debug, Default)]
 pub struct AuctionItem {
     #[serde(rename = "type")]
     pub item_type: AuctionType,
@@ -64,7 +81,53 @@ pub struct AuctionItem {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub damage: Option<i32>,
 }
+impl AuctionItem {
+    /// Generate a UUID based on all fields + attributes
+    pub fn uuid(&self) -> Uuid {
+        let mut input = String::new();
 
+        input.push_str(&format!("type:{};", self.item_type as i32));
+        input.push_str(&format!("weapon:{};", self.weapon_url_name));
+
+        if let Some(v) = &self.mod_name {
+            input.push_str(&format!("mod_name:{};", v.to_lowercase()));
+        }
+        if let Some(v) = &self.re_rolls {
+            input.push_str(&format!("re_rolls:{};", v));
+        }
+        if let Some(v) = &self.mastery_level {
+            input.push_str(&format!("mastery:{};", v));
+        }
+        if let Some(v) = &self.mod_rank {
+            input.push_str(&format!("mod_rank:{};", v));
+        }
+        if let Some(v) = &self.polarity {
+            input.push_str(&format!("polarity:{};", v.to_lowercase()));
+        }
+        if let Some(v) = &self.quirk {
+            input.push_str(&format!("quirk:{};", v.to_lowercase()));
+        }
+        if let Some(v) = &self.element {
+            input.push_str(&format!("element:{};", v.to_lowercase()));
+        }
+        if let Some(v) = &self.having_ephemera {
+            input.push_str(&format!("ephemera:{};", v));
+        }
+        if let Some(v) = &self.damage {
+            input.push_str(&format!("damage:{};", v));
+        }
+        if let Some(attrs) = &self.attributes {
+            // Sort attributes by URL name
+            let mut sorted_attrs = attrs.clone();
+            sorted_attrs.sort_by_key(|a| a.url_name.clone());
+            for a in sorted_attrs {
+                input.push_str(&format!("attr:{}:{}:{};", a.url_name, a.positive, a.value));
+            }
+        }
+        println!("UUID Input: {}", input);
+        Uuid::new_v5(&Uuid::NAMESPACE_OID, input.as_bytes())
+    }
+}
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ItemAttribute {
     pub url_name: String,
