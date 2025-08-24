@@ -18,6 +18,7 @@ use crate::{
 #[derive(Debug)]
 pub struct AuctionRoute<State> {
     auctions_cache: Mutex<AuctionList<Auction>>,
+    limit: Mutex<usize>,
     client: Weak<Client<State>>,
 }
 
@@ -29,6 +30,7 @@ impl<State: Clone + 'static> AuctionRoute<State> {
     pub fn new(client: Arc<Client<State>>) -> Arc<Self> {
         Arc::new(Self {
             auctions_cache: Mutex::new(AuctionList::new(vec![])),
+            limit: Mutex::new(50), // Default limit
             client: Arc::downgrade(&client),
         })
     }
@@ -152,6 +154,7 @@ impl<State: Clone + 'static> AuctionRoute<State> {
     pub fn from_existing<T>(old: &AuctionRoute<T>, client: Arc<Client<State>>) -> Arc<Self> {
         Arc::new(Self {
             auctions_cache: Mutex::new(old.auctions_cache.lock().unwrap().clone()),
+            limit: Mutex::new(old.limit.lock().unwrap().clone()),
             client: Arc::downgrade(&client),
         })
     }
@@ -211,6 +214,14 @@ where
      */
     pub async fn create(&self, args: CreateAuctionParams) -> Result<Auction, ApiError> {
         let client = self.client.upgrade().expect("Client should not be dropped");
+        if !self.can_create_auction() {
+            return Err(ApiError::AuctionLimitExceeded(RequestError::new(
+                ApiVersion::V1,
+                "POST".to_string(),
+                "/auctions/create".to_string(),
+                Some(json!(args)),
+            )));
+        }
         match client
             .as_ref()
             .call_api::<ApiResultV1<Value>>(
@@ -322,5 +333,39 @@ where
                 return Err(e);
             }
         }
+    }
+    /**
+     * Set the limit for active auctions
+     * # Arguments
+     * - `limit`: The new limit for active auctions
+     * # Returns
+     * - `Ok(())` if the limit was successfully set
+     * - `Err(ApiError)` if there was an error setting the limit
+     */
+    pub fn set_auction_limit(&self, limit: usize) {
+        let mut ca_auctions = self.limit.lock().unwrap();
+        *ca_auctions = limit;
+    }
+
+    /**
+     * Get the current limit for active auctions
+     * # Returns
+     * - `Ok(usize)` if the limit was successfully retrieved
+     * - `Err(ApiError)` if there was an error retrieving the limit
+     */
+    pub fn get_auction_limit(&self) -> usize {
+        let ca_auctions = self.limit.lock().unwrap();
+        *ca_auctions
+    }
+    /**
+     * Check if a new auction can be created
+     * # Returns
+     * - `true` if a new auction can be created
+     * - `false` if the auction limit has been reached
+     */
+    pub fn can_create_auction(&self) -> bool {
+        let ca_auctions = self.auctions_cache.lock().unwrap();
+        let auction_limit = self.get_auction_limit();
+        ca_auctions.total_auctions() < auction_limit
     }
 }

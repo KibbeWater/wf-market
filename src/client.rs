@@ -216,14 +216,10 @@ impl<State: Clone + 'static> Client<State> {
                         };
                         // Set the error in the RequestError
                         error.set_error(Some(wfm_err.clone()));
-                        if wfm_err.error.request.is_some()
-                            && wfm_err
-                                .error
-                                .request
-                                .unwrap()
-                                .contains(&"app.order.error.exceededOrderLimit".to_string())
-                        {
+                        if wfm_err.contains_error("app.order.error.exceededOrderLimit") {
                             return Err(ApiError::OrderLimitExceeded(error));
+                        } else if wfm_err.contains_error("exceededAuctionLimit") {
+                            return Err(ApiError::AuctionLimitExceeded(error));
                         } else if status == reqwest::StatusCode::FORBIDDEN {
                             return Err(ApiError::Forbidden(error));
                         } else if status == reqwest::StatusCode::NOT_FOUND {
@@ -635,6 +631,7 @@ impl Client<Authenticated> {
             Some(tier) => {
                 if tier.is_premium() {
                     self.order().set_order_limit(9999);
+                    self.auction().set_auction_limit(9999);
                 }
             }
             None => return Err(ApiError::Unknown("User tier not found".to_string())),
