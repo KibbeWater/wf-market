@@ -87,6 +87,25 @@ impl ResponseError {
             error_map.insert(key.to_string(), format!("{:?}", value));
         }
     }
+
+    pub fn contains_error(&self, search_key: impl Into<String>) -> bool {
+        let search_key = search_key.into();
+        if let Some(ref inputs) = self.error.inputs {
+            for (key, value) in inputs {
+                if key.contains(&search_key) || value.contains(&search_key) {
+                    return true;
+                }
+            }
+        }
+        if let Some(ref request) = self.error.request {
+            for value in request {
+                if value.contains(&search_key) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
 }
 
 impl Display for ResponseError {

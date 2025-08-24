@@ -1,6 +1,5 @@
 use crate::{
     Authenticated, Client,
-    endpoints::item,
     errors::ApiError,
     types::{
         AuctionFilter, AuctionLike, CreateAuctionItem, CreateAuctionParams, ItemAttribute,

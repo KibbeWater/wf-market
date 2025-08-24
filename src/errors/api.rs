@@ -15,6 +15,7 @@ pub enum ApiError {
     Forbidden(RequestError),
     InternalServerError(RequestError),
     OrderLimitExceeded(RequestError),
+    AuctionLimitExceeded(RequestError),
     InvalidType { expected: String, found: String },
     Unknown(String),
 }
@@ -31,6 +32,7 @@ impl ApiError {
             ApiError::InvalidCredentials(req_err) => req_err.mask_sensitive_data(properties),
             ApiError::Forbidden(req_err) => req_err.mask_sensitive_data(properties),
             ApiError::OrderLimitExceeded(req_err) => req_err.mask_sensitive_data(properties),
+            ApiError::AuctionLimitExceeded(req_err) => req_err.mask_sensitive_data(properties),
             ApiError::Unknown(_) | ApiError::InvalidType { .. } => {}
         }
     }
@@ -86,6 +88,10 @@ impl ApiError {
                 "type": "OrderLimitExceeded",
                 "error": req_err,
             }),
+            ApiError::AuctionLimitExceeded(req_err) => json!({
+                "type": "AuctionLimitExceeded",
+                "error": req_err,
+            }),
         }
     }
 }
@@ -136,6 +142,9 @@ impl Display for ApiError {
             }
             ApiError::OrderLimitExceeded(req_err) => {
                 write!(f, "Order limit exceeded: {}", req_err.error_sentence())
+            }
+            ApiError::AuctionLimitExceeded(req_err) => {
+                write!(f, "Auction limit exceeded: {}", req_err.error_sentence())
             }
         }
     }
