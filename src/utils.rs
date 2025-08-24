@@ -44,8 +44,33 @@ pub(super) fn mask_sensitive_data(data: &mut Map<String, Value>, properties: &[&
  * - `Ok(())` if the operation was successful.
  * - An `std::io::Error` if there was an issue creating or writing to the file.
  */
-pub fn write_json_file<T: serde::Serialize>(path: &str, data: &T) -> std::io::Result<()> {
-    let file = std::fs::File::create(path)?;
+pub fn write_json_file<T: serde::Serialize>(
+    path: impl AsRef<std::path::Path>,
+    data: &T,
+) -> std::io::Result<()> {
+    let path_ref = path.as_ref();
+    // Check if the folder exists
+    if let Some(parent) = path_ref.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let file = std::fs::File::create(path_ref)?;
     serde_json::to_writer(file, data)?;
     Ok(())
+}
+
+/*
+ * INTERNAL: Read a JSON file from the specified path.
+ * This function deserializes the JSON data from a file into the specified type.
+ *
+ * # Arguments
+ * - `path`: The file path from which the JSON data should be read.
+ *
+ * # Returns
+ * - `Ok(data)` if the operation was successful, where `data` is the deserialized content.
+ * - An `std::io::Error` if there was an issue opening or reading the file.
+ */
+pub fn read_json_file<T: serde::de::DeserializeOwned>(path: &str) -> std::io::Result<T> {
+    let file = std::fs::File::open(path)?;
+    let data = serde_json::from_reader(file)?;
+    Ok(data)
 }
