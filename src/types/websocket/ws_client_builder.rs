@@ -27,7 +27,7 @@ impl WsClientBuilder {
     pub(crate) fn new(version: ApiVersion, token: String, device_id: String) -> Self {
         Self {
             version,
-            router: Router::new(),
+            router: Router::new(false),
             token,
             device_id,
         }
@@ -51,6 +51,13 @@ impl WsClientBuilder {
         Router::get_reserved_paths()
     }
 
+    /*
+       Set whether to log unhandled routes
+    */
+    pub fn set_log_unhandled(mut self, log: bool) -> Self {
+        self.router.log_unhandled = log;
+        self
+    }
     /// Build and start the WebSocket client
     pub async fn build(self) -> Result<WsClient, WsError> {
         let router = Arc::new(self.router);

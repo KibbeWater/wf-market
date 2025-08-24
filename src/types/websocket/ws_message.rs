@@ -23,7 +23,7 @@ impl WsMessage {
             version,
             route: route.to_string(),
             payload,
-            id: Some(uuid::Uuid::new_v4().to_string()),
+            id: Some(uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, route.as_bytes()).to_string()),
             ref_id: None,
         }
     }

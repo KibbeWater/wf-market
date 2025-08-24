@@ -8,12 +8,14 @@ pub type MessageCallback =
 
 // Internal router
 pub(crate) struct Router {
+    pub log_unhandled: bool,
     routes: HashMap<String, MessageCallback>,
 }
 
 impl Router {
-    pub fn new() -> Self {
+    pub fn new(log_unhandled: bool) -> Self {
         Self {
+            log_unhandled,
             routes: HashMap::new(),
         }
     }
@@ -66,7 +68,7 @@ impl Router {
 
         if let Some(callback) = callback {
             callback(message, &route, sender)?;
-        } else {
+        } else if self.log_unhandled {
             // Optionally log unhandled routes
             println!(
                 "No handler for route: {} (full: {})",

@@ -24,13 +24,13 @@ impl MessageSender {
         ref_id: &str,
     ) -> Result<(), WsError> {
         let message = WsMessage::new(route, Some(payload), self.version.clone())
-            .with_id(&uuid::Uuid::new_v4().to_string())
+            .with_id(&uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, ref_id.as_bytes()).to_string())
             .with_ref_id(ref_id);
         self.send_message(message)
     }
 
     pub fn send_request(&self, route: &str, payload: serde_json::Value) -> Result<String, WsError> {
-        let id = uuid::Uuid::new_v4().to_string();
+        let id = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, route.as_bytes()).to_string();
         let message = WsMessage::new(route, Some(payload), self.version.clone()).with_id(&id);
         self.send_message(message)?;
         Ok(id)
