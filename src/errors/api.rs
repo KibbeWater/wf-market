@@ -13,8 +13,10 @@ pub enum ApiError {
     BadRequest(RequestError),
     InvalidCredentials(RequestError),
     Forbidden(RequestError),
-    Unknown(String),
+    InternalServerError(RequestError),
+    OrderLimitExceeded(RequestError),
     InvalidType { expected: String, found: String },
+    Unknown(String),
 }
 impl ApiError {
     pub fn mask_sensitive_data(&mut self, properties: &[&str]) {
@@ -24,9 +26,11 @@ impl ApiError {
             ApiError::Unauthorized(req_err) => req_err.mask_sensitive_data(properties),
             ApiError::ParsingError(req_err, _) => req_err.mask_sensitive_data(properties),
             ApiError::NotFound(req_err) => req_err.mask_sensitive_data(properties),
+            ApiError::InternalServerError(req_err) => req_err.mask_sensitive_data(properties),
             ApiError::BadRequest(req_err) => req_err.mask_sensitive_data(properties),
             ApiError::InvalidCredentials(req_err) => req_err.mask_sensitive_data(properties),
             ApiError::Forbidden(req_err) => req_err.mask_sensitive_data(properties),
+            ApiError::OrderLimitExceeded(req_err) => req_err.mask_sensitive_data(properties),
             ApiError::Unknown(_) | ApiError::InvalidType { .. } => {}
         }
     }
@@ -65,6 +69,10 @@ impl ApiError {
                 "type": "Forbidden",
                 "error": req_err,
             }),
+            ApiError::InternalServerError(req_err) => json!({
+                "type": "InternalServerError",
+                "error": req_err,
+            }),
             ApiError::Unknown(_) => json!({
                 "type": "Unknown",
                 "message": "An unknown error occurred."
@@ -73,6 +81,10 @@ impl ApiError {
                 "type": "InvalidType",
                 "expected": expected,
                 "found": found,
+            }),
+            ApiError::OrderLimitExceeded(req_err) => json!({
+                "type": "OrderLimitExceeded",
+                "error": req_err,
             }),
         }
     }
@@ -118,6 +130,12 @@ impl Display for ApiError {
                     "Invalid type: expected '{}', found '{}'",
                     expected, found
                 )
+            }
+            ApiError::InternalServerError(req_err) => {
+                write!(f, "Internal server error: {}", req_err.error_sentence())
+            }
+            ApiError::OrderLimitExceeded(req_err) => {
+                write!(f, "Order limit exceeded: {}", req_err.error_sentence())
             }
         }
     }
