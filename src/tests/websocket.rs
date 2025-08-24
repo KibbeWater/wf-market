@@ -36,6 +36,7 @@ async fn websocket_v1() {
 
     let ws_client = client
         .create_websocket(ApiVersion::V1)
+        .set_log_unhandled(true)
         .register_callback("USER/SET_STATUS", move |msg, _, _| {
             let mut vec = received_messages_clone.lock().unwrap();
             vec.push(msg.clone());
