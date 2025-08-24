@@ -194,6 +194,9 @@ impl<State: Clone + 'static> Client<State> {
                     reqwest::StatusCode::TOO_MANY_REQUESTS => {
                         return Err(ApiError::TooManyRequests(error));
                     }
+                    reqwest::StatusCode::INTERNAL_SERVER_ERROR => {
+                        return Err(ApiError::InternalServerError(error));
+                    }
                     reqwest::StatusCode::BAD_REQUEST
                     | reqwest::StatusCode::FORBIDDEN
                     | reqwest::StatusCode::NOT_FOUND => {
@@ -212,8 +215,16 @@ impl<State: Clone + 'static> Client<State> {
                             },
                         };
                         // Set the error in the RequestError
-                        error.set_error(Some(wfm_err));
-                        if status == reqwest::StatusCode::FORBIDDEN {
+                        error.set_error(Some(wfm_err.clone()));
+                        if wfm_err.error.request.is_some()
+                            && wfm_err
+                                .error
+                                .request
+                                .unwrap()
+                                .contains(&"app.order.error.exceededOrderLimit".to_string())
+                        {
+                            return Err(ApiError::OrderLimitExceeded(error));
+                        } else if status == reqwest::StatusCode::FORBIDDEN {
                             return Err(ApiError::Forbidden(error));
                         } else if status == reqwest::StatusCode::NOT_FOUND {
                             return Err(ApiError::NotFound(error));
@@ -512,10 +523,6 @@ impl Client<Unauthenticated> {
         let new_client = self
             .create_authenticated_client(token.to_string(), device_id.to_string(), true)
             .await?;
-        match new_client.refresh().await {
-            Ok(_) => {}
-            Err(e) => return Err(e),
-        }
         Ok(new_client)
     }
 }
@@ -612,13 +619,25 @@ impl Client<Authenticated> {
     If the data is successfully refreshed.
     */
     pub async fn refresh(&self) -> Result<String, ApiError> {
-        match self.user().me().await {
-            Ok(_) => {}
+        let user = match self.user().me().await {
+            Ok(user) => user,
             Err(e) => return Err(e),
-        }
+        };
         match self.order().my_orders().await {
             Ok(_) => {}
             Err(e) => return Err(e),
+        }
+        match self.auction().my_auctions().await {
+            Ok(_) => {}
+            Err(e) => return Err(e),
+        }
+        match user.tier {
+            Some(tier) => {
+                if tier.is_premium() {
+                    self.order().set_order_limit(9999);
+                }
+            }
+            None => return Err(ApiError::Unknown("User tier not found".to_string())),
         }
         Ok("Successfully refreshed user data".to_string())
     }
