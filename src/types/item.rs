@@ -17,6 +17,8 @@ pub struct Item {
     pub vaulted: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ducats: Option<u32>,
+    #[serde(rename = "bulkTradable", skip_serializing_if = "Option::is_none")]
+    pub bulk_tradable: Option<bool>,
 
     // MODS
     #[serde(rename = "maxRank", skip_serializing_if = "Option::is_none")]

@@ -122,3 +122,6 @@ pub use sub_type::*;
 
 pub mod order_list;
 pub use order_list::*;
+
+pub mod auction_list;
+pub use auction_list::*;

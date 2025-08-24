@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use std::{fmt::Display, marker::PhantomData};
 
 use serde::{Deserialize, Serialize};
 
@@ -61,6 +61,9 @@ impl OrderLike for Order {
         }
         if let Some(visible) = args.visible {
             self.visible = visible;
+        }
+        if let Some(properties) = args.properties {
+            self.properties = Some(properties);
         }
     }
 }
@@ -151,7 +154,7 @@ impl<State: OrderLike + Clone> OrderList<State> {
     pub fn find_order(
         &self,
         id: impl Into<String>,
-        sub_type: SubType,
+        sub_type: &SubType,
         order_type: OrderType,
     ) -> Option<State> {
         let id = id.into();
@@ -159,12 +162,12 @@ impl<State: OrderLike + Clone> OrderList<State> {
             OrderType::Sell => self
                 .sell_orders
                 .iter()
-                .find(|o| o.to_order().item_id == id && o.to_order().sub_type() == &sub_type)
+                .find(|o| o.to_order().item_id == id && o.to_order().sub_type() == sub_type)
                 .cloned(),
             OrderType::Buy => self
                 .buy_orders
                 .iter()
-                .find(|o| o.to_order().item_id == id && o.to_order().sub_type() == &sub_type)
+                .find(|o| o.to_order().item_id == id && o.to_order().sub_type() == sub_type)
                 .cloned(),
         }
     }
@@ -301,12 +304,10 @@ impl<State: OrderLike + Clone> OrderList<State> {
     */
     pub fn update(&mut self, order_id: impl Into<String>, args: UpdateOrderParams) {
         let order_id = order_id.into();
-        println!("Updating order with ID: {}", order_id);
 
         // First check buy orders
         for order in &mut self.buy_orders {
             if order.to_order().id == order_id {
-                println!("Found buy order to update: {:?}", order.to_order().id);
                 order.update(args);
                 return;
             }
@@ -315,7 +316,6 @@ impl<State: OrderLike + Clone> OrderList<State> {
         // Then check sell orders
         for order in &mut self.sell_orders {
             if order.to_order().id == order_id {
-                println!("Found sell order to update: {:?}", order.to_order().id);
                 order.update(args);
                 return;
             }
@@ -431,5 +431,28 @@ impl OrderList<OrderWithUser> {
             .retain(|o| o.user().map_or(false, |u| u.name == name));
         self.buy_orders
             .retain(|o| o.user().map_or(false, |u| u.name == name));
+    }
+}
+
+impl Display for OrderList<Order> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut output = String::new();
+        output.push_str(&format!(
+            "Sell Orders: {}, Buy Orders: {}",
+            self.sell_orders.len(),
+            self.buy_orders.len()
+        ));
+        write!(f, "{}", output)
+    }
+}
+impl Display for OrderList<OrderWithUser> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut output = String::new();
+        output.push_str(&format!(
+            "Sell Orders: {}, Buy Orders: {}",
+            self.sell_orders.len(),
+            self.buy_orders.len()
+        ));
+        write!(f, "{}", output)
     }
 }

@@ -13,6 +13,8 @@ pub struct UpdateOrderParams {
     pub rank: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub visible: Option<bool>,
+    #[serde(skip_serializing)]
+    pub properties: Option<serde_json::Value>, // Additional properties for the order
 }
 
 impl UpdateOrderParams {
@@ -30,8 +32,8 @@ impl UpdateOrderParams {
         self
     }
 
-    pub fn with_per_trade(mut self, per_trade: u32) -> Self {
-        self.per_trade = Some(per_trade);
+    pub fn with_per_trade(mut self, per_trade: Option<u32>) -> Self {
+        self.per_trade = per_trade;
         self
     }
 
@@ -42,6 +44,10 @@ impl UpdateOrderParams {
 
     pub fn with_visible(mut self, visible: bool) -> Self {
         self.visible = Some(visible);
+        self
+    }
+    pub fn with_properties(mut self, properties: serde_json::Value) -> Self {
+        self.properties = Some(properties);
         self
     }
 }

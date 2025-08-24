@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex, Weak};
+use std::{
+    path,
+    sync::{Arc, Mutex, Weak},
+};
 
 use reqwest::Method;
 use serde_json::json;
@@ -8,11 +11,13 @@ use crate::{
     enums::*,
     errors::*,
     types::*,
+    utils::{read_json_file, write_json_file},
 };
 
 #[derive(Debug)]
 pub struct OrderRoute<State> {
     orders: Mutex<OrderList<Order>>,
+    limit: Mutex<usize>,
     client: Weak<Client<State>>,
 }
 
@@ -24,6 +29,7 @@ impl<State: Clone + 'static> OrderRoute<State> {
     pub fn new(client: Arc<Client<State>>) -> Arc<Self> {
         Arc::new(Self {
             orders: Mutex::new(OrderList::new(vec![])),
+            limit: Mutex::new(100), // Default limit for recent orders
             client: Arc::downgrade(&client),
         })
     }
@@ -98,6 +104,19 @@ impl<State: Clone + 'static> OrderRoute<State> {
     ) -> Result<OrderList<OrderWithUser>, ApiError> {
         let client = self.client.upgrade().expect("Client should not be dropped");
 
+        // Check if the path exists
+        let path = format!(
+            "C:\\Users\\Kenya\\AppData\\Local\\dev.kenya.quantframe\\logs\\static\\orders_item_{}.json",
+            slug
+        );
+
+        if path::Path::new(&path).exists() {
+            // If the file exists, read it and return the cached data
+            if let Ok(data) = read_json_file(&path) {
+                return Ok(data);
+            }
+        }
+
         match client
             .as_ref()
             .call_api::<ApiResultV2<Vec<OrderWithUser>>>(
@@ -109,7 +128,14 @@ impl<State: Clone + 'static> OrderRoute<State> {
             )
             .await
         {
-            Ok((orders, _, _)) => Ok(OrderList::new(orders.data)),
+            Ok((orders, _, _)) => {
+                let list = OrderList::new(orders.data);
+                write_json_file(path, &json!(list)).map_err(|e| {
+                    eprintln!("Failed to write JSON file: {}", e);
+                    ApiError::Unknown("Failed to write JSON file".into())
+                })?;
+                Ok(list)
+            }
             Err(e) => {
                 return Err(e);
             }
@@ -161,6 +187,7 @@ impl<State: Clone + 'static> OrderRoute<State> {
     pub fn from_existing<T>(old: &OrderRoute<T>, client: Arc<Client<State>>) -> Arc<Self> {
         Arc::new(Self {
             orders: Mutex::new(old.orders.lock().unwrap().clone()),
+            limit: Mutex::new(old.limit.lock().unwrap().clone()),
             client: Arc::downgrade(&client),
         })
     }
@@ -243,9 +270,13 @@ where
             .await
         {
             Ok((existing_order, _, _)) => {
+                let mut order = existing_order.data;
+                if let Some(properties) = args.properties.clone() {
+                    order.properties = Some(properties);
+                }
                 let mut ca_orders = self.orders.lock().unwrap();
                 ca_orders.update(order_id, args);
-                return Ok(existing_order.data);
+                return Ok(order);
             }
             Err(e) => {
                 return Err(e);
@@ -262,6 +293,14 @@ where
      */
     pub async fn create(&self, args: CreateOrderParams) -> Result<Order, ApiError> {
         let client = self.client.upgrade().expect("Client should not be dropped");
+        if !self.can_create_order() {
+            return Err(ApiError::OrderLimitExceeded(RequestError::new(
+                ApiVersion::V2,
+                "POST".to_string(),
+                "/order".to_string(),
+                Some(json!(args)),
+            )));
+        }
         match client
             .as_ref()
             .call_api::<ApiResultV2<Order>>(
@@ -274,8 +313,9 @@ where
             .await
         {
             Ok((new_order, _, _)) => {
-                let order = new_order.data;
+                let mut order = new_order.data;
                 let mut ca_orders = self.orders.lock().unwrap();
+                order.properties = args.properties; // Set properties if any
                 ca_orders.add(order.clone());
                 return Ok(order);
             }
@@ -356,5 +396,40 @@ where
                 return Err(e);
             }
         }
+    }
+
+    /**
+     * Set the limit for active orders
+     * # Arguments
+     * - `limit`: The new limit for active orders
+     * # Returns
+     * - `Ok(())` if the limit was successfully set
+     * - `Err(ApiError)` if there was an error setting the limit
+     */
+    pub fn set_order_limit(&self, limit: usize) {
+        let mut ca_orders = self.limit.lock().unwrap();
+        *ca_orders = limit;
+    }
+
+    /**
+     * Get the current limit for active orders
+     * # Returns
+     * - `Ok(usize)` if the limit was successfully retrieved
+     * - `Err(ApiError)` if there was an error retrieving the limit
+     */
+    pub fn get_order_limit(&self) -> usize {
+        let ca_orders = self.limit.lock().unwrap();
+        *ca_orders
+    }
+    /**
+     * Check if a new order can be created
+     * # Returns
+     * - `true` if a new order can be created
+     * - `false` if the order limit has been reached
+     */
+    pub fn can_create_order(&self) -> bool {
+        let ca_orders = self.orders.lock().unwrap();
+        let order_limit = self.get_order_limit();
+        ca_orders.total_orders() < order_limit
     }
 }
