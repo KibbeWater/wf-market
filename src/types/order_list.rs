@@ -153,11 +153,11 @@ impl<State: OrderLike + Clone> OrderList<State> {
     */
     pub fn find_order(
         &self,
-        id: impl Into<String>,
+        wfm_id: impl Into<String>,
         sub_type: &SubType,
         order_type: OrderType,
     ) -> Option<State> {
-        let id = id.into();
+        let id = wfm_id.into();
         match order_type {
             OrderType::Sell => self
                 .sell_orders
@@ -388,6 +388,16 @@ impl<State: OrderLike + Clone> OrderList<State> {
                 .iter()
                 .map(|o| o.to_order().id.clone())
                 .collect(),
+        }
+    }
+
+    /*
+       Returns the top `size` results orders
+    */
+    pub fn take_top(&self, size: usize, order_type: OrderType) -> Vec<State> {
+        match order_type {
+            OrderType::Sell => self.sell_orders.iter().take(size).cloned().collect(),
+            OrderType::Buy => self.buy_orders.iter().take(size).cloned().collect(),
         }
     }
 }
