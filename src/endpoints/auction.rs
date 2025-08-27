@@ -110,7 +110,7 @@ impl<State: Clone + 'static> AuctionRoute<State> {
             }
         }
 
-        let query = serde_urlencoded::to_string(filter).map_err(|e| {
+        let query = serde_urlencoded::to_string(&filter).map_err(|e| {
             ApiError::Unknown(format!("Failed to serialize auctions filter: {}", e))
         })?;
 
@@ -134,7 +134,20 @@ impl<State: Clone + 'static> AuctionRoute<State> {
                 })?;
                 let auctions = serde_json::from_value::<Vec<AuctionWithOwner>>(value.clone())
                     .map_err(|e| ApiError::ParsingError(err, e))?;
-                let list = AuctionList::new(auctions);
+                let mut list = AuctionList::new(auctions);
+
+                if filter.user_activity.as_ref().is_some() {
+                    list.filter_user_status(filter.user_activity.unwrap(), false);
+                }
+                if filter.similarity.as_ref().is_some()
+                    && filter.similarity_attributes.as_ref().is_some()
+                {
+                    list.filter_similarity(
+                        filter.similarity.unwrap(),
+                        filter.similarity_attributes.clone().unwrap(),
+                    );
+                }
+
                 write_json_file(path, &json!(list)).map_err(|e| {
                     eprintln!("Failed to write JSON file: {}", e);
                     ApiError::Unknown("Failed to write JSON file".into())
