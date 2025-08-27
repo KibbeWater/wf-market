@@ -1,6 +1,9 @@
 use serde::Serialize;
 
-use crate::enums::{AuctionType, Polarity, StatusType};
+use crate::{
+    enums::{AuctionType, Polarity, StatusType},
+    types::ItemAttribute,
+};
 
 #[derive(Clone, Default, Serialize)]
 pub struct AuctionFilter {
@@ -19,6 +22,12 @@ pub struct AuctionFilter {
 
     #[serde(skip)]
     pub user_activity: Option<StatusType>,
+
+    #[serde(skip)]
+    pub similarity: Option<i64>,
+
+    #[serde(skip)]
+    pub similarity_attributes: Option<Vec<ItemAttribute>>,
 }
 
 impl AuctionFilter {
@@ -36,6 +45,8 @@ impl AuctionFilter {
             re_rolls_max: None,
             buyout_policy: None,
             user_activity: None,
+            similarity: None,
+            similarity_attributes: None,
         }
     }
 
@@ -86,6 +97,12 @@ impl AuctionFilter {
 
     pub fn with_user_activity(mut self, user_activity: StatusType) -> Self {
         self.user_activity = Some(user_activity);
+        self
+    }
+
+    pub fn with_similarity(mut self, similarity: i64, attributes: Vec<ItemAttribute>) -> Self {
+        self.similarity = Some(similarity);
+        self.similarity_attributes = Some(attributes);
         self
     }
 }

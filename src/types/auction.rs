@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
-use crate::{enums::AuctionType, types::UserShort};
+use crate::{enums::*, types::*};
 use uuid::Uuid;
 #[derive(Deserialize, Serialize, Clone, Debug, Default)]
 pub struct Auction {
@@ -80,6 +81,10 @@ pub struct AuctionItem {
     pub having_ephemera: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub damage: Option<i32>,
+
+    // Similarity information for the item Is not from WFM
+    #[serde(default)]
+    pub similarity: Similarity,
 }
 impl AuctionItem {
     /// Generate a UUID based on all fields + attributes
@@ -127,6 +132,59 @@ impl AuctionItem {
         println!("UUID Input: {}", input);
         Uuid::new_v5(&Uuid::NAMESPACE_OID, input.as_bytes())
     }
+
+    /// Compare this auction item's attributes (candidate) against the provided `attributes` (reference/base).
+    /// - missing: in base but not in this item
+    /// - extra:   in this item but not in base
+    pub fn apply_similarity(&mut self, attributes: Vec<ItemAttribute>) -> Similarity {
+        if self.item_type != AuctionType::Riven {
+            return Similarity::default();
+        }
+
+        let cand = self.attributes.clone().unwrap_or_default(); // this auction's attributes
+        let base_set: HashSet<(String, bool)> = attributes
+            .iter()
+            .map(|a| (a.url_name.clone(), a.positive))
+            .collect();
+        let cand_set: HashSet<(String, bool)> = cand
+            .iter()
+            .map(|a| (a.url_name.clone(), a.positive))
+            .collect();
+
+        // missing = base \ cand
+        let mut missing: Vec<String> = base_set
+            .difference(&cand_set)
+            .map(|(name, pos)| format!("{}:{}", name, pos))
+            .collect();
+
+        // extra = cand \ base
+        let mut extra: Vec<String> = cand_set
+            .difference(&base_set)
+            .map(|(name, pos)| format!("{}:{}", name, pos))
+            .collect();
+
+        // Deterministic order
+        missing.sort();
+        extra.sort();
+
+        // Jaccard similarity over unique keys
+        let intersection = base_set.intersection(&cand_set).count() as f32;
+        let union = base_set.union(&cand_set).count() as f32;
+        let score = if union > 0.0 {
+            intersection / union
+        } else {
+            -1.0
+        };
+
+        let similarity = Similarity {
+            score,
+            missing,
+            extra,
+        };
+        println!("Calculated Similarity: {:?}", similarity);
+        self.similarity = similarity.clone();
+        similarity
+    }
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ItemAttribute {
@@ -136,9 +194,9 @@ pub struct ItemAttribute {
 }
 
 impl ItemAttribute {
-    pub fn new(url_name: &str, positive: bool, value: f64) -> Self {
+    pub fn new(url_name: impl Into<String>, positive: bool, value: f64) -> Self {
         Self {
-            url_name: url_name.to_string(),
+            url_name: url_name.into(),
             positive,
             value,
         }

@@ -125,3 +125,6 @@ pub use order_list::*;
 
 pub mod auction_list;
 pub use auction_list::*;
+
+pub mod similarity;
+pub use similarity::*;

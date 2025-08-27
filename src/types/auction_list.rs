@@ -205,6 +205,36 @@ impl<State: AuctionLike + Clone> AuctionList<State> {
             .map(|auction| auction.to_auction().platinum() as i64)
             .collect()
     }
+
+    /*
+    Filter auctions by similarity.
+    # Arguments
+    - similarity: i64: The similarity score to filter by.
+    - attributes: Vec<ItemAttribute>: The item attributes to filter by.
+    - exclude: bool: If true, excludes auctions with the specified similarity; otherwise, includes
+    */
+    pub fn filter_similarity(&mut self, similarity: i64, attributes: Vec<ItemAttribute>) {
+        let auctions = self
+            .auctions
+            .iter_mut()
+            .filter_map(|o| {
+                let sim = o.to_auction().item.apply_similarity(attributes.clone());
+                if sim.score >= (similarity as f32 / 100.0) {
+                    Some(o.clone())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<State>>();
+        self.auctions = auctions;
+    }
+
+    /*
+       Returns the top `size` results auctions
+    */
+    pub fn take_top(&self, size: usize) -> Vec<State> {
+        self.auctions.iter().take(size).cloned().collect()
+    }
 }
 
 impl AuctionList<AuctionWithOwner> {
