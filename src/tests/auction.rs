@@ -40,16 +40,25 @@ async fn get_auctions() {
 #[tokio::test]
 async fn search_auctions() {
     let client = Client::new();
+    let attributes = vec![
+        ItemAttribute::new("magazine_capacity", true, 5000.0),
+        ItemAttribute::new("electric_damage", true, -55.0),
+        ItemAttribute::new("multishot", true, -55.0),
+        ItemAttribute::new("recoil", false, -55.0),
+    ];
     let mut items = client
         .auction()
         .search_auctions(
             AuctionFilter::new(crate::enums::AuctionType::Riven, "cortege")
+                .with_user_activity(crate::enums::StatusType::InGame)
+                // .with_similarity(10, attributes)
                 .with_polarity(crate::enums::Polarity::Madurai),
         )
         .await
         .unwrap();
-    items.filter_user_status(crate::enums::StatusType::InGame, false);
+
     // Loop through the items and print them
+    items.filter_similarity(50, attributes);
     println!("Total Auctions: {}", items.total_auctions());
     // Print the first item for brevity
     if items.auctions.is_empty() {
