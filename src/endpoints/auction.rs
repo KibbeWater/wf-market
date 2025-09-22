@@ -252,7 +252,7 @@ where
                 })?;
                 let mut auction = serde_json::from_value::<Auction>(value.clone())
                     .map_err(|e| ApiError::ParsingError(err, e))?;
-
+                auction.properties = args.properties; // Set properties if any
                 auction.apply_uuid();
 
                 let mut cache = self.auctions_cache.lock().unwrap();
@@ -294,6 +294,9 @@ where
                 })?;
                 let mut auction = serde_json::from_value::<Auction>(value.clone())
                     .map_err(|e| ApiError::ParsingError(err, e))?;
+                if let Some(properties) = args.properties.clone() {
+                    auction.properties = Some(properties);
+                }
                 auction.apply_uuid();
                 let mut cache = self.auctions_cache.lock().unwrap();
                 cache.update(auction.clone());
