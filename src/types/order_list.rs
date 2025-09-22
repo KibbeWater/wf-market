@@ -331,41 +331,22 @@ impl<State: OrderLike + Clone> OrderList<State> {
      */
     pub fn close_order(&mut self, order_id: impl Into<String>, quantity: u32) {
         let order_id = order_id.into();
-        let mut remove_buy = false;
-        let mut remove_sell = false;
-
+        let orders = self
+            .buy_orders
+            .iter_mut()
+            .chain(self.sell_orders.iter_mut())
+            .collect::<Vec<_>>();
         // First check buy orders
-        for order in &mut self.buy_orders {
+        for order in orders {
             if order.to_order().id == order_id {
-                if order.to_order().quantity < quantity {
-                    remove_buy = true;
+                let new_quantity = order.to_order().quantity - quantity;
+                if new_quantity <= 0 {
+                    self.remove_by_id(order_id);
                 } else {
-                    order.update(
-                        UpdateOrderParams::new()
-                            .with_quantity(order.to_order().quantity - quantity),
-                    );
+                    order.update(UpdateOrderParams::new().with_quantity(new_quantity));
                 }
                 break;
             }
-        }
-
-        // Then check sell orders
-        for order in &mut self.sell_orders {
-            if order.to_order().id == order_id {
-                if order.to_order().quantity < quantity {
-                    remove_sell = true;
-                } else {
-                    order.update(
-                        UpdateOrderParams::new()
-                            .with_quantity(order.to_order().quantity - quantity),
-                    );
-                }
-                break;
-            }
-        }
-
-        if remove_buy || remove_sell {
-            self.remove_by_id(order_id);
         }
     }
 
@@ -399,6 +380,21 @@ impl<State: OrderLike + Clone> OrderList<State> {
             OrderType::Sell => self.sell_orders.iter().take(size).cloned().collect(),
             OrderType::Buy => self.buy_orders.iter().take(size).cloned().collect(),
         }
+    }
+    /*
+       Get Order by ID
+       # Arguments
+       - order_id: &str: The ID of the order to get.
+       # Returns
+       - Option<Order>: The order with the specified ID, if it exists.
+    */
+    pub fn get_by_id(&self, order_id: impl Into<String>) -> Option<Order> {
+        let order_id = order_id.into();
+        self.sell_orders
+            .iter()
+            .chain(self.buy_orders.iter())
+            .find(|o| o.to_order().id == order_id)
+            .map(|o| o.to_order().clone())
     }
 }
 
