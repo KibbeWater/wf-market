@@ -67,6 +67,26 @@ impl WsMessage {
         self.ref_id = Some(ref_id.to_string());
         self
     }
+    pub fn get_payload_as<T: for<'de> Deserialize<'de>>(
+        &self,
+        key: Option<impl Into<String>>,
+    ) -> Result<Option<T>, serde_json::Error> {
+        if let Some(ref payload) = self.payload {
+            let key = key.map(Into::into);
+            let payload = if let Some(key) = key {
+                payload
+                    .get(&key)
+                    .cloned()
+                    .unwrap_or(serde_json::Value::Null)
+            } else {
+                payload.clone()
+            };
+            let deserialized: T = serde_json::from_value(payload.clone())?;
+            Ok(Some(deserialized))
+        } else {
+            Ok(None)
+        }
+    }
 }
 impl Serialize for WsMessage {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

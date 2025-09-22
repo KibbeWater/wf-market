@@ -38,11 +38,20 @@ impl WsClientBuilder {
     /// Examples:
     /// - `register_callback("cmd/subscribe/newOrders", callback)` - matches any parameter
     /// - `register_callback("cmd/subscribe/newOrders:ok", callback)` - matches only :ok parameter
+    /// Note:
+    /// - You can register multiple paths separated by commas, e.g., "path1,path2"
     pub fn register_callback<F>(mut self, path: &str, callback: F) -> Result<Self, WsError>
     where
         F: Fn(&WsMessage, &Route, &MessageSender) -> Result<(), WsError> + Send + Sync + 'static,
     {
-        self.router.register(path, Arc::new(callback))?;
+        if path.contains(',') {
+            let value = Arc::new(callback);
+            for p in path.split(',') {
+                self.router.register(p, value.clone())?;
+            }
+        } else {
+            self.router.register(path, Arc::new(callback))?;
+        }
         Ok(self)
     }
 
