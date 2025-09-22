@@ -102,6 +102,9 @@ pub use sister_weapon::*;
 pub mod chat;
 pub use chat::*;
 
+pub mod chat_list;
+pub use chat_list::*;
+
 pub mod chat_message;
 pub use chat_message::*;
 

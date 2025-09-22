@@ -636,6 +636,10 @@ impl Client<Authenticated> {
             }
             None => return Err(ApiError::Unknown("User tier not found".to_string())),
         }
+        match self.chat().get_chats().await {
+            Ok(_) => {}
+            Err(e) => return Err(e),
+        }
         Ok("Successfully refreshed user data".to_string())
     }
 }
