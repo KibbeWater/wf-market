@@ -1,14 +1,23 @@
-use std::sync::{Arc, Mutex, Weak};
+use std::{
+    f32::consts::E,
+    sync::{Arc, Mutex, Weak},
+};
 
 use reqwest::Method;
 use serde::de::Error;
 use serde_json::Value;
 
-use crate::{IsAuthenticated, client::Client, enums::*, errors::*, types::*};
+use crate::{
+    IsAuthenticated,
+    client::Client,
+    enums::*,
+    errors::*,
+    types::{websocket::WsMessage, *},
+};
 
 #[derive(Debug)]
 pub struct ChatRoute<State> {
-    chats_cache: Mutex<Option<Vec<Chat>>>,
+    chats_cache: Mutex<ChatList>,
     client: Weak<Client<State>>,
 }
 
@@ -19,7 +28,7 @@ impl<State: Clone + 'static> ChatRoute<State> {
      */
     pub fn new(client: Arc<Client<State>>) -> Arc<Self> {
         Arc::new(Self {
-            chats_cache: Mutex::new(None),
+            chats_cache: Mutex::new(ChatList { chats: vec![] }),
             client: Arc::downgrade(&client),
         })
     }
@@ -41,12 +50,31 @@ where
     State: IsAuthenticated + Clone + 'static,
 {
     /**
+    Get a clone of the current chats from the cache.
+    # Returns
+    - `ChatList`: A clone of the cached chats.
+    */
+    pub fn cache_chats(&self) -> ChatList {
+        let ca_chats = self.chats_cache.lock().unwrap();
+        ca_chats.clone()
+    }
+
+    /**
+    Get a mutable reference to the current chats from the cache.
+    # Returns
+    - `std::sync::MutexGuard<Vec<Chat>>`: A mutable reference to the cached chats.
+    */
+    pub fn cache_chats_mut(&'_ self) -> std::sync::MutexGuard<'_, ChatList> {
+        self.chats_cache.lock().unwrap()
+    }
+
+    /**
      * Fetches the a list of chats from the API.
      * # Returns
-     * - `Ok(Vec<Chat>)` containing the list of chats if successful.
+     * - `Ok(ChatList)` containing the list of chats if successful.
      * - `Err(ApiError)` if the API call fails or if the response cannot be parsed.
      */
-    pub async fn get_chats(&self) -> Result<Vec<Chat>, ApiError> {
+    pub async fn get_chats(&self) -> Result<ChatList, ApiError> {
         let client = self.client.upgrade().expect("Client should not be dropped");
 
         match client
@@ -60,8 +88,9 @@ where
                 })?;
                 let chats = serde_json::from_value::<Vec<Chat>>(user_value.clone())
                     .map_err(|e| ApiError::ParsingError(err.clone(), e))?;
+                let chats = ChatList::new(chats);
                 let mut ca_chats = self.chats_cache.lock().unwrap();
-                *ca_chats = Some(chats.clone());
+                *ca_chats = chats.clone();
                 Ok(chats)
             }
             Err(e) => {
@@ -100,6 +129,8 @@ where
                 })?;
                 let messages = serde_json::from_value::<Vec<ChatMessage>>(user_value.clone())
                     .map_err(|e| ApiError::ParsingError(err.clone(), e))?;
+                let mut chat = self.chats_cache.lock().unwrap();
+                chat.get_by_id(chat_id, true);
                 Ok(messages)
             }
             Err(e) => {
@@ -139,6 +170,8 @@ where
                         serde_json::Error::custom("Chat ID is not a string"),
                     )
                 })?;
+                let mut ca_chats = self.chats_cache.lock().unwrap();
+                ca_chats.delete_by_id(chat_id);
                 Ok(id_str.to_string())
             }
             Err(e) => {

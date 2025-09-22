@@ -13,6 +13,8 @@ pub struct CreateAuctionParams {
     pub visible: bool,
     pub note: String,
     pub item: CreateAuctionItem,
+    #[serde(skip_serializing)]
+    pub properties: Option<serde_json::Value>, // Additional properties for the order
 }
 
 impl CreateAuctionParams {
@@ -21,7 +23,7 @@ impl CreateAuctionParams {
         buyout_price: Option<i32>,
         minimal_reputation: i32,
         visible: bool,
-        note: &str,
+        note: impl Into<String>,
         item: CreateAuctionItem,
     ) -> Self {
         Self {
@@ -29,9 +31,14 @@ impl CreateAuctionParams {
             buyout_price,
             minimal_reputation,
             visible,
-            note: note.to_string(),
+            note: note.into(),
             item,
+            properties: None,
         }
+    }
+    pub fn with_properties(mut self, properties: serde_json::Value) -> Self {
+        self.properties = Some(properties);
+        self
     }
 }
 
