@@ -12,6 +12,8 @@ pub struct UpdateAuctionParams {
     pub starting_price: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub visible: Option<bool>,
+    #[serde(skip_serializing)]
+    pub properties: Option<serde_json::Value>, // Additional properties for the order
 }
 
 impl UpdateAuctionParams {
@@ -38,6 +40,10 @@ impl UpdateAuctionParams {
 
     pub fn with_visible(mut self, visible: bool) -> Self {
         self.visible = Some(visible);
+        self
+    }
+    pub fn with_properties(mut self, properties: serde_json::Value) -> Self {
+        self.properties = Some(properties);
         self
     }
 }

@@ -129,7 +129,6 @@ impl AuctionItem {
                 input.push_str(&format!("attr:{}:{}:{};", a.url_name, a.positive, a.value));
             }
         }
-        println!("UUID Input: {}", input);
         Uuid::new_v5(&Uuid::NAMESPACE_OID, input.as_bytes())
     }
 
@@ -191,6 +190,12 @@ pub struct ItemAttribute {
     pub url_name: String,
     pub positive: bool,
     pub value: f64,
+    #[serde(default = "unknown_effect")] // Is set by the user
+    pub effect: String,
+}
+
+fn unknown_effect() -> String {
+    String::from("Unknown Effect")
 }
 
 impl ItemAttribute {
@@ -199,6 +204,7 @@ impl ItemAttribute {
             url_name: url_name.into(),
             positive,
             value,
+            effect: String::from("Unknown Effect"),
         }
     }
 }

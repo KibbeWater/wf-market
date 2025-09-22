@@ -7,3 +7,12 @@ pub enum OrderType {
     #[serde(rename = "sell")]
     Sell,
 }
+
+impl OrderType {
+    pub fn to_string(&self) -> String {
+        match self {
+            OrderType::Buy => "buy".into(),
+            OrderType::Sell => "sell".into(),
+        }
+    }
+}

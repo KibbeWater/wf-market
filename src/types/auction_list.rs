@@ -235,6 +235,9 @@ impl<State: AuctionLike + Clone> AuctionList<State> {
     pub fn take_top(&self, size: usize) -> Vec<State> {
         self.auctions.iter().take(size).cloned().collect()
     }
+    pub fn to_vec(&self) -> Vec<State> {
+        self.auctions.clone()
+    }
 }
 
 impl AuctionList<AuctionWithOwner> {

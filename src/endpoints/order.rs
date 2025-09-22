@@ -212,9 +212,17 @@ where
     # Returns
     - `std::sync::MutexGuard<OrderList<Order>>`: A mutable reference to the cached orders.
     */
-    pub fn cache_orders_mut(&self) -> std::sync::MutexGuard<OrderList<Order>> {
+    pub fn cache_orders_mut(&'_ self) -> std::sync::MutexGuard<'_, OrderList<Order>> {
         self.orders.lock().unwrap()
     }
+    /**
+     * Set orders in the cache
+     */
+    pub fn set_orders(&self, orders: OrderList<Order>) {
+        let mut ca_orders = self.orders.lock().unwrap();
+        *ca_orders = orders;
+    }
+
     /**
     Get the authenticated users orders
     * # Returns
