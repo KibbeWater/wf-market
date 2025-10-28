@@ -283,6 +283,15 @@ impl<State: Clone + 'static> Client<State> {
         self
     }
 
+    /**
+     * Sets the rate limit for the client
+     * # Arguments
+     * - `requests_per_second`: The maximum number of requests per second
+     */
+    pub fn set_rate_limit(&mut self, requests_per_second: NonZeroU32) {
+        self.limiter = build_limiter(requests_per_second).into();
+    }
+
     // Endpoint methods to access routes
     pub fn manifest(&self) -> Arc<ManifestRoute<State>> {
         self.manifest_route

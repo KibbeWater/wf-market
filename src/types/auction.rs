@@ -180,7 +180,6 @@ impl AuctionItem {
             missing,
             extra,
         };
-        println!("Calculated Similarity: {:?}", similarity);
         self.similarity = similarity.clone();
         similarity
     }

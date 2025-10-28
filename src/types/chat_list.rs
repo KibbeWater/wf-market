@@ -1,11 +1,6 @@
-use std::{fmt::Display, marker::PhantomData};
-
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    enums::*,
-    types::{websocket::WsMessage, *},
-};
+use crate::types::*;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ChatList {
