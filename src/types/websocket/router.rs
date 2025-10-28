@@ -89,10 +89,6 @@ impl Router {
     ) -> Result<(), WsError> {
         match route.base_path() {
             "cmd/auth/signIn" => {
-                println!(
-                    "Handling internal auth sign in with parameter: {:?}",
-                    route.parameter
-                );
                 // Example: Handle different auth responses based on parameter
                 match route.parameter.as_deref() {
                     Some("ok") => {

@@ -1,19 +1,10 @@
-use std::{
-    f32::consts::E,
-    sync::{Arc, Mutex, Weak},
-};
+use std::sync::{Arc, Mutex, Weak};
 
 use reqwest::Method;
 use serde::de::Error;
 use serde_json::Value;
 
-use crate::{
-    IsAuthenticated,
-    client::Client,
-    enums::*,
-    errors::*,
-    types::{websocket::WsMessage, *},
-};
+use crate::{IsAuthenticated, client::Client, enums::*, errors::*, types::*};
 
 #[derive(Debug)]
 pub struct ChatRoute<State> {

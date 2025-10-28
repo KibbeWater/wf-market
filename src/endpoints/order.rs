@@ -1,7 +1,4 @@
-use std::{
-    path,
-    sync::{Arc, Mutex, Weak},
-};
+use std::sync::{Arc, Mutex, Weak};
 
 use reqwest::Method;
 use serde_json::json;
@@ -11,7 +8,6 @@ use crate::{
     enums::*,
     errors::*,
     types::*,
-    utils::{read_json_file, write_json_file},
 };
 
 #[derive(Debug)]
@@ -104,19 +100,6 @@ impl<State: Clone + 'static> OrderRoute<State> {
     ) -> Result<OrderList<OrderWithUser>, ApiError> {
         let client = self.client.upgrade().expect("Client should not be dropped");
 
-        // Check if the path exists
-        let path = format!(
-            "C:\\Users\\Kenya\\AppData\\Local\\dev.kenya.quantframe\\logs\\static\\orders_item_{}.json",
-            slug
-        );
-
-        if path::Path::new(&path).exists() {
-            // If the file exists, read it and return the cached data
-            if let Ok(data) = read_json_file(&path) {
-                return Ok(data);
-            }
-        }
-
         match client
             .as_ref()
             .call_api::<ApiResultV2<Vec<OrderWithUser>>>(
@@ -130,10 +113,6 @@ impl<State: Clone + 'static> OrderRoute<State> {
         {
             Ok((orders, _, _)) => {
                 let list = OrderList::new(orders.data);
-                write_json_file(path, &json!(list)).map_err(|e| {
-                    eprintln!("Failed to write JSON file: {}", e);
-                    ApiError::Unknown("Failed to write JSON file".into())
-                })?;
                 Ok(list)
             }
             Err(e) => {

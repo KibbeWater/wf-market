@@ -124,9 +124,7 @@ impl WsClientBuilder {
                                     "deviceId": self.device_id,
                                 });
                                 match sender.send_request("@wfm|cmd/auth/signIn", auth_payload) {
-                                    Ok(_) => {
-                                        println!("Authentication request sent successfully.");
-                                    }
+                                    Ok(_) => {}
                                     Err(e) => {
                                         eprintln!("Failed to send authentication request: {:?}", e);
                                         continue; // Retry connection
