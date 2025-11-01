@@ -13,6 +13,7 @@ pub enum ApiError {
     BadRequest(RequestError),
     InvalidCredentials(RequestError),
     Forbidden(RequestError),
+    EndOfFile(RequestError),
     InternalServerError(RequestError),
     OrderLimitExceeded(RequestError),
     AuctionLimitExceeded(RequestError),
@@ -33,7 +34,8 @@ impl ApiError {
             ApiError::Forbidden(req_err) => req_err.mask_sensitive_data(properties),
             ApiError::OrderLimitExceeded(req_err) => req_err.mask_sensitive_data(properties),
             ApiError::AuctionLimitExceeded(req_err) => req_err.mask_sensitive_data(properties),
-            ApiError::Unknown(_) | ApiError::InvalidType { .. } => {}
+            ApiError::EndOfFile(req_err) => req_err.mask_sensitive_data(properties),
+            ApiError::InvalidType { .. } | ApiError::Unknown(_) => {}
         }
     }
     pub fn to_json(&self) -> serde_json::Value {
@@ -92,6 +94,10 @@ impl ApiError {
                 "type": "AuctionLimitExceeded",
                 "error": req_err,
             }),
+            ApiError::EndOfFile(req_err) => json!({
+                "type": "EndOfFile",
+                "error": req_err,
+            }),
         }
     }
 }
@@ -145,6 +151,9 @@ impl Display for ApiError {
             }
             ApiError::AuctionLimitExceeded(req_err) => {
                 write!(f, "Auction limit exceeded: {}", req_err.error_sentence())
+            }
+            ApiError::EndOfFile(req_err) => {
+                write!(f, "End of file: {}", req_err.error_sentence())
             }
         }
     }
