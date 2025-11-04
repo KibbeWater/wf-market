@@ -177,14 +177,14 @@ impl<State: Clone + 'static> Client<State> {
             Ok(resp) => {
                 let headers = resp.headers().clone();
                 let status = resp.status();
+                error.set_status_code(status.as_u16());
 
-                let body = resp
-                    .text()
-                    .await
-                    .map_err(|_| ApiError::Unknown("Error".to_string()))?;
+                let body = resp.text().await.map_err(|e| {
+                    error.set_content(format!("Failed to read response body: {}", e));
+                    ApiError::RequestError(error.clone())
+                })?;
                 // Log the error with the response body
                 error.set_content(body.clone());
-                error.set_status_code(status.as_u16());
                 // Check if the status code indicates an error
                 match status {
                     reqwest::StatusCode::OK | reqwest::StatusCode::CREATED => {}
@@ -230,8 +230,8 @@ impl<State: Clone + 'static> Client<State> {
                     }
                     _ => {
                         return Err(ApiError::Unknown(format!(
-                            "Unexpected status code: {}",
-                            status
+                            "Unexpected status code: {} with body: {}",
+                            status, body
                         )));
                     }
                 }
