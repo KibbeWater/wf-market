@@ -16,6 +16,7 @@ pub enum ApiError {
     EndOfFile(RequestError),
     InternalServerError(RequestError),
     OrderLimitExceeded(RequestError),
+    OrderLimitExceededSamePrice(RequestError),
     AuctionLimitExceeded(RequestError),
     InvalidType { expected: String, found: String },
     Unknown(String),
@@ -33,6 +34,9 @@ impl ApiError {
             ApiError::InvalidCredentials(req_err) => req_err.mask_sensitive_data(properties),
             ApiError::Forbidden(req_err) => req_err.mask_sensitive_data(properties),
             ApiError::OrderLimitExceeded(req_err) => req_err.mask_sensitive_data(properties),
+            ApiError::OrderLimitExceededSamePrice(req_err) => {
+                req_err.mask_sensitive_data(properties)
+            }
             ApiError::AuctionLimitExceeded(req_err) => req_err.mask_sensitive_data(properties),
             ApiError::EndOfFile(req_err) => req_err.mask_sensitive_data(properties),
             ApiError::InvalidType { .. } | ApiError::Unknown(_) => {}
@@ -88,6 +92,10 @@ impl ApiError {
             }),
             ApiError::OrderLimitExceeded(req_err) => json!({
                 "type": "OrderLimitExceeded",
+                "error": req_err,
+            }),
+            ApiError::OrderLimitExceededSamePrice(req_err) => json!({
+                "type": "OrderLimitExceededSamePrice",
                 "error": req_err,
             }),
             ApiError::AuctionLimitExceeded(req_err) => json!({
@@ -148,6 +156,13 @@ impl Display for ApiError {
             }
             ApiError::OrderLimitExceeded(req_err) => {
                 write!(f, "Order limit exceeded: {}", req_err.error_sentence())
+            }
+            ApiError::OrderLimitExceededSamePrice(req_err) => {
+                write!(
+                    f,
+                    "Order limit exceeded (same price): {}",
+                    req_err.error_sentence()
+                )
             }
             ApiError::AuctionLimitExceeded(req_err) => {
                 write!(f, "Auction limit exceeded: {}", req_err.error_sentence())

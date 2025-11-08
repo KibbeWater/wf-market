@@ -194,7 +194,17 @@ impl<State: Clone + 'static> Client<State> {
                     reqwest::StatusCode::TOO_MANY_REQUESTS => {
                         return Err(ApiError::TooManyRequests(error));
                     }
-                    reqwest::StatusCode::INTERNAL_SERVER_ERROR => {
+                    reqwest::StatusCode::INTERNAL_SERVER_ERROR
+                    | reqwest::StatusCode::NOT_IMPLEMENTED
+                    | reqwest::StatusCode::BAD_GATEWAY
+                    | reqwest::StatusCode::SERVICE_UNAVAILABLE
+                    | reqwest::StatusCode::GATEWAY_TIMEOUT
+                    | reqwest::StatusCode::HTTP_VERSION_NOT_SUPPORTED
+                    | reqwest::StatusCode::VARIANT_ALSO_NEGOTIATES
+                    | reqwest::StatusCode::INSUFFICIENT_STORAGE
+                    | reqwest::StatusCode::LOOP_DETECTED
+                    | reqwest::StatusCode::NOT_EXTENDED
+                    | reqwest::StatusCode::NETWORK_AUTHENTICATION_REQUIRED => {
                         return Err(ApiError::InternalServerError(error));
                     }
                     reqwest::StatusCode::BAD_REQUEST
@@ -216,7 +226,9 @@ impl<State: Clone + 'static> Client<State> {
                         };
                         // Set the error in the RequestError
                         error.set_error(Some(wfm_err.clone()));
-                        if wfm_err.contains_error("app.order.error.exceededOrderLimit") {
+                        if wfm_err.contains_error("app.order.error.exceededOrderLimitSamePrice") {
+                            return Err(ApiError::OrderLimitExceededSamePrice(error));
+                        } else if wfm_err.contains_error("app.order.error.exceededOrderLimit") {
                             return Err(ApiError::OrderLimitExceeded(error));
                         } else if wfm_err.contains_error("exceededAuctionLimit") {
                             return Err(ApiError::AuctionLimitExceeded(error));
