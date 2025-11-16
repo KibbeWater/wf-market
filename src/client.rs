@@ -240,12 +240,17 @@ impl<State: Clone + 'static> Client<State> {
                             return Err(ApiError::BadRequest(error));
                         }
                     }
-                    _ => {
-                        return Err(ApiError::Unknown(format!(
-                            "Unexpected status code: {} with body: {}",
-                            status, body
-                        )));
-                    }
+                    _ => match status.as_u16() {
+                        500..=599 => {
+                            return Err(ApiError::InternalServerError(error));
+                        }
+                        _ => {
+                            return Err(ApiError::Unknown(format!(
+                                "Unexpected status code: {} with body: {}",
+                                status, body
+                            )));
+                        }
+                    },
                 }
 
                 let data = serde_json::from_str::<T>(&body);
