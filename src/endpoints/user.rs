@@ -42,6 +42,7 @@ impl<State: Clone + 'static> UserRoute<State> {
                 ApiVersion::V2,
                 Method::GET,
                 &format!("/user/{}", slug),
+                "GET:user:slug",
                 None,
                 None,
             )
@@ -68,6 +69,7 @@ impl<State: Clone + 'static> UserRoute<State> {
                 ApiVersion::V2,
                 Method::GET,
                 &format!("/userId/{}", user_id),
+                "GET:user:user_id",
                 None,
                 None,
             )
@@ -123,7 +125,14 @@ where
 
         match client
             .as_ref()
-            .call_api::<ApiResultV2<UserPrivate>>(ApiVersion::V2, Method::GET, "/me", None, None)
+            .call_api::<ApiResultV2<UserPrivate>>(
+                ApiVersion::V2,
+                Method::GET,
+                "/me",
+                "GET:user:me",
+                None,
+                None,
+            )
             .await
         {
             Ok((user, _, _)) => {
@@ -157,6 +166,7 @@ where
                 ApiVersion::V2,
                 Method::PATCH,
                 "/me",
+                "PATCH:user:me",
                 Some(json!(args)),
                 None,
             )

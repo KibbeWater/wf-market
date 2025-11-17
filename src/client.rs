@@ -6,23 +6,110 @@ use crate::{
     utils::*,
 };
 use governor::{
-    RateLimiter,
+    Quota, RateLimiter,
     clock::DefaultClock,
     state::{InMemoryState, NotKeyed},
 };
 use reqwest::{
     Method,
-    header::{HeaderMap, HeaderName, HeaderValue},
+    header::{HeaderMap, HeaderName, HeaderValue, RETRY_AFTER},
 };
 use serde_json::Value;
 use std::{
     collections::HashMap,
     marker::PhantomData,
     num::{NonZero, NonZeroU32},
-    sync::{Arc, OnceLock},
+    sync::{Arc, Mutex, OnceLock},
 };
 
 const REQUESTS_PER_SECOND: NonZeroU32 = NonZero::new(3).unwrap();
+
+#[derive(Debug, Clone)]
+pub enum RateLimitTier {
+    PerSecond(u32),
+    PerMinute(u32),
+    PerHour(u32),
+}
+
+impl RateLimitTier {
+    pub fn downgrade(&self) -> RateLimitTier {
+        match *self {
+            RateLimitTier::PerSecond(_) => RateLimitTier::PerMinute(50),
+            RateLimitTier::PerMinute(_) => RateLimitTier::PerHour(2),
+            RateLimitTier::PerHour(_) => RateLimitTier::PerHour(1),
+        }
+    }
+
+    pub fn current_limit(&self) -> u32 {
+        match *self {
+            RateLimitTier::PerSecond(x)
+            | RateLimitTier::PerMinute(x)
+            | RateLimitTier::PerHour(x) => x,
+        }
+    }
+
+    pub fn sub_tract(&self, value: u32) -> RateLimitTier {
+        match *self {
+            RateLimitTier::PerSecond(x) => {
+                if x > value {
+                    RateLimitTier::PerSecond(x - value)
+                } else {
+                    RateLimitTier::PerSecond(1)
+                }
+            }
+            RateLimitTier::PerMinute(x) => {
+                if x > value {
+                    RateLimitTier::PerMinute(x - value)
+                } else {
+                    RateLimitTier::PerMinute(1)
+                }
+            }
+            RateLimitTier::PerHour(x) => {
+                if x > value {
+                    RateLimitTier::PerHour(x - value)
+                } else {
+                    RateLimitTier::PerHour(1)
+                }
+            }
+        }
+    }
+    pub fn quota_type(&self) -> &'static str {
+        match *self {
+            RateLimitTier::PerSecond(_) => "per_second",
+            RateLimitTier::PerMinute(_) => "per_minute",
+            RateLimitTier::PerHour(_) => "per_hour",
+        }
+    }
+    pub fn build_limiter(&self) -> RateLimiter<NotKeyed, InMemoryState, DefaultClock> {
+        match *self {
+            RateLimitTier::PerSecond(x) => {
+                RateLimiter::direct(Quota::per_second(NonZeroU32::new(x).unwrap()))
+            }
+            RateLimitTier::PerMinute(x) => {
+                RateLimiter::direct(Quota::per_minute(NonZeroU32::new(x).unwrap()))
+            }
+            RateLimitTier::PerHour(x) => {
+                RateLimiter::direct(Quota::per_hour(NonZeroU32::new(x).unwrap()))
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct RouteLimiter {
+    pub quota_type: RateLimitTier,
+    pub limiter: Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>,
+    pub wait_time_sec: f64,
+}
+impl RouteLimiter {
+    pub fn new(quota_type: RateLimitTier, wait_time_sec: f64) -> Self {
+        Self {
+            limiter: quota_type.build_limiter().into(),
+            quota_type,
+            wait_time_sec,
+        }
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct Unauthenticated;
@@ -44,6 +131,8 @@ pub struct Client<State = Unauthenticated> {
     platform: Platform,
     crossplay: bool,
     limiter: Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>,
+    per_route_limiter: Arc<Mutex<HashMap<String, RouteLimiter>>>,
+    tracking: Arc<Mutex<HashMap<String, usize>>>,
     // Routes
     manifest_route: OnceLock<Arc<ManifestRoute<State>>>,
     item_route: OnceLock<Arc<ItemRoute<State>>>,
@@ -82,6 +171,8 @@ impl<State: Clone + 'static> Client<State> {
                     chat_route: self.chat_route.clone(),
                     auction_route: self.auction_route.clone(),
                     limiter: self.limiter.clone(),
+                    per_route_limiter: self.per_route_limiter.clone(),
+                    tracking: self.tracking.clone(),
                     _state: PhantomData,
                 })
             })
@@ -93,12 +184,38 @@ impl<State: Clone + 'static> Client<State> {
         version: ApiVersion,
         method: Method,
         path: &str,
+        key: impl Into<String>,
         body: Option<Value>,
         headers: Option<HashMap<String, String>>,
     ) -> Result<(T, HeaderMap, RequestError), ApiError> {
         let url = version.api_url().to_owned() + path;
         println!("Calling API: {} {}", method, url);
         let mut default_headers = reqwest::header::HeaderMap::new();
+        let key = key.into();
+
+        self.tracking
+            .lock()
+            .unwrap()
+            .entry(key.clone())
+            .and_modify(|e| *e += 1)
+            .or_insert(1);
+
+        // Get Limiter for the route
+        let (mut quota_type, limiter, wait_time_sec) = if let Some(route_limiter) =
+            self.per_route_limiter.lock().unwrap().get(&key).cloned()
+        {
+            (
+                route_limiter.quota_type.clone(),
+                route_limiter.limiter.clone(),
+                route_limiter.wait_time_sec,
+            )
+        } else {
+            (
+                RateLimitTier::PerSecond(REQUESTS_PER_SECOND.get()),
+                self.limiter.clone(),
+                0.0,
+            )
+        };
 
         // Create the error object for logging
         let mut error = RequestError::new(
@@ -171,7 +288,11 @@ impl<State: Clone + 'static> Client<State> {
         if let Some(b) = body {
             builder = builder.json(&b);
         }
-        self.limiter.until_ready().await;
+        if wait_time_sec > 0.0 {
+            tokio::time::sleep(std::time::Duration::from_secs_f64(wait_time_sec)).await;
+            self.clear_wait_time(key.clone());
+        }
+        limiter.until_ready().await;
 
         match builder.send().await {
             Ok(resp) => {
@@ -185,6 +306,7 @@ impl<State: Clone + 'static> Client<State> {
                 })?;
                 // Log the error with the response body
                 error.set_content(body.clone());
+
                 // Check if the status code indicates an error
                 match status {
                     reqwest::StatusCode::OK | reqwest::StatusCode::CREATED => {}
@@ -192,6 +314,18 @@ impl<State: Clone + 'static> Client<State> {
                         return Err(ApiError::Unauthorized(error));
                     }
                     reqwest::StatusCode::TOO_MANY_REQUESTS => {
+                        let retry_after = headers
+                            .get(RETRY_AFTER)
+                            .and_then(|h| h.to_str().ok())
+                            .and_then(|s| s.parse::<u64>().ok())
+                            .unwrap_or(1);
+                        error.set_retry_after(Some(retry_after));
+                        if quota_type.current_limit() > 1 {
+                            quota_type = quota_type.sub_tract(1);
+                        } else {
+                            quota_type = quota_type.downgrade();
+                        };
+                        self.set_rate_limit_for_route(key, quota_type, retry_after as f64);
                         return Err(ApiError::TooManyRequests(error));
                     }
                     reqwest::StatusCode::INTERNAL_SERVER_ERROR
@@ -309,6 +443,54 @@ impl<State: Clone + 'static> Client<State> {
         self.limiter = build_limiter(requests_per_second).into();
     }
 
+    /**
+     * Gets the tracking data for the client
+     * # Returns
+     * An `Arc<Mutex<HashMap<String, usize>>>` containing the tracking data
+     */
+    pub fn get_tracking(&self) -> Arc<Mutex<HashMap<String, usize>>> {
+        self.tracking.clone()
+    }
+
+    /**
+     * Gets the per-route limiter for the client
+     * # Returns
+     * An `Arc<Mutex<HashMap<String, RouteLimiter>>>` containing the per-route limiters
+     */
+    pub fn get_per_route_limiter(&self) -> Arc<Mutex<HashMap<String, RouteLimiter>>> {
+        self.per_route_limiter.clone()
+    }
+
+    /**
+     * Sets the rate limit for a specific route
+     * # Arguments
+     * - `route`: The route to set the rate limit for
+     * - `requests_per_second`: The maximum number of requests per second for the route
+     */
+    fn set_rate_limit_for_route(
+        &self,
+        route: impl Into<String>,
+        quota_type: RateLimitTier,
+        wait_time_sec: f64,
+    ) {
+        let mut per_route_limiter = self.per_route_limiter.lock().unwrap();
+        let route_str = route.into();
+        let quota_type = quota_type.into();
+        if let Some(limiter) = per_route_limiter.get_mut(&route_str) {
+            *limiter = RouteLimiter::new(quota_type, wait_time_sec);
+        } else {
+            per_route_limiter.insert(route_str, RouteLimiter::new(quota_type, wait_time_sec));
+        }
+    }
+
+    pub fn clear_wait_time(&self, route: impl Into<String>) {
+        let mut per_route_limiter = self.per_route_limiter.lock().unwrap();
+        let route_str = route.into();
+        if let Some(limiter) = per_route_limiter.get_mut(&route_str) {
+            limiter.wait_time_sec = 0.0;
+        }
+    }
+
     // Endpoint methods to access routes
     pub fn manifest(&self) -> Arc<ManifestRoute<State>> {
         self.manifest_route
@@ -384,10 +566,12 @@ impl Client<Unauthenticated> {
             order_route: OnceLock::new(),
             user_route: OnceLock::new(),
             achievement_route: OnceLock::new(),
+            auction_route: OnceLock::new(),
             authentication_route: OnceLock::new(),
             chat_route: OnceLock::new(),
-            auction_route: OnceLock::new(),
             limiter: build_limiter(REQUESTS_PER_SECOND).into(),
+            per_route_limiter: Arc::new(Mutex::new(HashMap::new())),
+            tracking: Arc::new(Mutex::new(HashMap::new())),
             _state: PhantomData,
         }
     }
@@ -417,6 +601,8 @@ impl Client<Unauthenticated> {
             chat_route: OnceLock::new(),
             auction_route: OnceLock::new(),
             limiter: self.limiter.clone(),
+            per_route_limiter: self.per_route_limiter.clone(),
+            tracking: self.tracking.clone(),
             _state: PhantomData,
         };
         let arc = Arc::new(client);

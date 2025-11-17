@@ -44,6 +44,7 @@ impl<State: Clone + 'static> RivenRoute<State> {
                 ApiVersion::V2,
                 Method::GET,
                 "/riven/weapons",
+                "GET:riven:weapons",
                 None,
                 None,
             )
@@ -75,6 +76,7 @@ impl<State: Clone + 'static> RivenRoute<State> {
                 ApiVersion::V2,
                 Method::GET,
                 &format!("/riven/weapon/{}", slug),
+                "GET:riven:weapon:slug",
                 None,
                 None,
             )
@@ -107,6 +109,7 @@ impl<State: Clone + 'static> RivenRoute<State> {
                 ApiVersion::V2,
                 Method::GET,
                 "/riven/attributes",
+                "GET:riven:attributes",
                 None,
                 None,
             )

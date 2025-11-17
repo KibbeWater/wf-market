@@ -68,6 +68,7 @@ where
                 ApiVersion::V1,
                 Method::POST,
                 "/auth/signin",
+                "POST:auth:signin",
                 Some(serde_json::to_value(map).unwrap()),
                 Some(HashMap::from([(
                     "Authorization".to_string(),

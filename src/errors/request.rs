@@ -14,6 +14,7 @@ pub struct RequestError {
     pub payload: Option<serde_json::Value>,
     pub headers: HashMap<String, String>,
     pub content: String,
+    pub retry_after: Option<u64>,
     pub wfm_error: Option<ResponseError>,
 }
 
@@ -26,6 +27,7 @@ impl RequestError {
     ) -> Self {
         RequestError {
             status_code: 0, // Default value, can be set later if needed
+            retry_after: None,
             version,
             method,
             url,
@@ -49,6 +51,9 @@ impl RequestError {
     }
     pub fn set_error(&mut self, error: Option<ResponseError>) {
         self.wfm_error = error;
+    }
+    pub fn set_retry_after(&mut self, retry_after: Option<u64>) {
+        self.retry_after = retry_after;
     }
     /**
      * Masks sensitive data in payload and headers.
@@ -96,6 +101,10 @@ impl RequestError {
             parts.push(format!("returned status {}", self.status_code));
         }
 
+        if let Some(retry_after) = self.retry_after {
+            parts.push(format!("Retry-After: {} seconds", retry_after));
+        }
+
         // Add API Payload
         if let Some(ref payload) = self.payload {
             parts.push(format!("Payload: {}", payload));
@@ -124,6 +133,7 @@ impl Default for RequestError {
     fn default() -> Self {
         RequestError {
             status_code: 0,
+            retry_after: None,
             version: ApiVersion::V1, // Default to V1
             method: String::new(),
             url: String::new(),

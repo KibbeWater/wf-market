@@ -46,6 +46,7 @@ impl<State: Clone + 'static> LichRoute<State> {
                 ApiVersion::V2,
                 Method::GET,
                 "/lich/weapons",
+                "GET:lich:weapons",
                 None,
                 None,
             )
@@ -77,6 +78,7 @@ impl<State: Clone + 'static> LichRoute<State> {
                 ApiVersion::V2,
                 Method::GET,
                 &format!("/lich/weapon/{}", slug),
+                "GET:lich:weapon:slug",
                 None,
                 None,
             )
@@ -109,6 +111,7 @@ impl<State: Clone + 'static> LichRoute<State> {
                 ApiVersion::V2,
                 Method::GET,
                 "/lich/ephemeras",
+                "GET:lich:ephemeras",
                 None,
                 None,
             )
@@ -146,6 +149,7 @@ impl<State: Clone + 'static> LichRoute<State> {
                 ApiVersion::V2,
                 Method::GET,
                 "/lich/quirks",
+                "GET:lich:quirks",
                 None,
                 None,
             )

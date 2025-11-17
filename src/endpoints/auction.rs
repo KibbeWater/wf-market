@@ -59,7 +59,14 @@ impl<State: Clone + 'static> AuctionRoute<State> {
 
         match client
             .as_ref()
-            .call_api::<ApiResultV1<Value>>(ApiVersion::V1, Method::GET, "/auctions", None, None)
+            .call_api::<ApiResultV1<Value>>(
+                ApiVersion::V1,
+                Method::GET,
+                "/auctions",
+                "GET:auctions",
+                None,
+                None,
+            )
             .await
         {
             Ok((data, _, err)) => {
@@ -103,6 +110,7 @@ impl<State: Clone + 'static> AuctionRoute<State> {
                 ApiVersion::V1,
                 Method::GET,
                 &format!("/auctions/search?{}", query),
+                "GET:auctions:search",
                 None,
                 None,
             )
@@ -171,6 +179,7 @@ where
                 ApiVersion::V1,
                 Method::GET,
                 &format!("/profile/{}/auctions", user.ingame_name),
+                "GET:profile:auctions",
                 None,
                 None,
             )
@@ -220,6 +229,7 @@ where
                 ApiVersion::V1,
                 Method::POST,
                 "/auctions/create",
+                "POST:auctions:create",
                 Some(json!(args)),
                 None,
             )
@@ -262,6 +272,7 @@ where
                 ApiVersion::V1,
                 Method::PUT,
                 format!("/auctions/entry/{}", auction_id).as_str(),
+                "PUT:auctions:entry",
                 Some(json!(args)),
                 None,
             )
@@ -302,6 +313,7 @@ where
                 ApiVersion::V1,
                 Method::PUT,
                 format!("/auctions/entry/{}/close", order_id).as_str(),
+                "PUT:auctions:entry:close",
                 None,
                 None,
             )

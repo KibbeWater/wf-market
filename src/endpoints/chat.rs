@@ -70,7 +70,14 @@ where
 
         match client
             .as_ref()
-            .call_api::<ApiResultV1<Value>>(ApiVersion::V1, Method::GET, "/im/chats", None, None)
+            .call_api::<ApiResultV1<Value>>(
+                ApiVersion::V1,
+                Method::GET,
+                "/im/chats",
+                "GET:im:chats",
+                None,
+                None,
+            )
             .await
         {
             Ok((data, _, err)) => {
@@ -106,6 +113,7 @@ where
                 ApiVersion::V1,
                 Method::GET,
                 &format!("/im/chats/{}", chat_id),
+                "GET:im:chats:chat_id",
                 None,
                 None,
             )
@@ -146,6 +154,7 @@ where
                 ApiVersion::V1,
                 Method::DELETE,
                 &format!("/im/chats/{}", chat_id),
+                "DELETE:im:chats:chat_id",
                 None,
                 None,
             )
@@ -185,6 +194,7 @@ where
                 ApiVersion::V1,
                 Method::GET,
                 "/im/ignore",
+                "GET:im:ignore",
                 None,
                 None,
             )
@@ -214,6 +224,7 @@ where
                 ApiVersion::V1,
                 Method::POST,
                 "/im/ignore",
+                "POST:im:ignore",
                 Some(serde_json::json!({
                     "chat_id": chat_id,
                     "user_id": user_id,
@@ -252,6 +263,7 @@ where
                 ApiVersion::V1,
                 Method::DELETE,
                 &format!("/im/ignore/{}", user_id),
+                "DELETE:im:ignore:user_id",
                 None,
                 None,
             )

@@ -42,7 +42,7 @@ impl<State: Clone + 'static> ItemRoute<State> {
 
         match client
             .as_ref()
-            .call_api::<ApiResultV2<Vec<Item>>>(ApiVersion::V2, Method::GET, "/items", None, None)
+            .call_api::<ApiResultV2<Vec<Item>>>(ApiVersion::V2, Method::GET, "/items", "GET:items", None, None)
             .await
         {
             Ok((items, _, _)) => {
@@ -71,6 +71,7 @@ impl<State: Clone + 'static> ItemRoute<State> {
                 ApiVersion::V2,
                 Method::GET,
                 &format!("/item/{}", slug),
+                "GET:item:slug",
                 None,
                 None,
             )

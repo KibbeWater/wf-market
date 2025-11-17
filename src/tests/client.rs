@@ -1,5 +1,12 @@
 use dotenv::dotenv;
-use std::env;
+use std::{env, time::Instant};
+
+use governor::{
+    Quota, RateLimiter,
+    clock::DefaultClock,
+    state::{InMemoryState, NotKeyed},
+};
+use std::num::NonZeroU32;
 
 use crate::{Client, errors::ApiError};
 
@@ -105,4 +112,46 @@ async fn rate_limiting() {
 
     // The test passes if we can send requests (regardless of rate limiting)
     assert!(successful_requests + rate_limited_requests + other_errors == 50);
+}
+
+pub struct MyService {
+    limiter: RateLimiter<NotKeyed, InMemoryState, DefaultClock>,
+}
+
+impl MyService {
+    pub fn new() -> Self {
+        let quota = Quota::per_minute(NonZeroU32::new(1).unwrap()); // 1 req/min
+        let limiter = RateLimiter::direct(quota);
+
+        Self { limiter }
+    }
+
+    /// Async method using until_ready
+    pub async fn do_work(&self) -> &'static str {
+        // Wait until request can proceed
+        self.limiter.until_ready().await;
+        println!("Work done");
+        "allowed"
+    }
+}
+#[tokio::test]
+async fn test_rate_limiter_async() {
+    let service = MyService::new();
+
+    // First two calls happen immediately.
+    service.do_work().await;
+    service.do_work().await;
+    service.do_work().await;
+    service.do_work().await;
+    service.do_work().await;
+
+    let start = Instant::now();
+
+    // Third call should wait because quota is exceeded.
+    service.do_work().await;
+
+    let elapsed = start.elapsed();
+
+    // Should have waited ~500ms (given 2 req/sec)
+    assert!(elapsed >= std::time::Duration::from_millis(450));
 }

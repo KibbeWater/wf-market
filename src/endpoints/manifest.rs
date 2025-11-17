@@ -47,6 +47,7 @@ impl<State: Clone + 'static> ManifestRoute<State> {
                 ApiVersion::V2,
                 Method::GET,
                 "/versions",
+                "GET:versions",
                 None,
                 None,
             )
@@ -83,6 +84,7 @@ impl<State: Clone + 'static> ManifestRoute<State> {
                 ApiVersion::V2,
                 Method::GET,
                 "/locations",
+                "GET:locations",
                 None,
                 None,
             )
@@ -115,7 +117,14 @@ impl<State: Clone + 'static> ManifestRoute<State> {
 
         match client
             .as_ref()
-            .call_api::<ApiResultV2<Vec<Npc>>>(ApiVersion::V2, Method::GET, "/npcs", None, None)
+            .call_api::<ApiResultV2<Vec<Npc>>>(
+                ApiVersion::V2,
+                Method::GET,
+                "/npcs",
+                "GET:npcs",
+                None,
+                None,
+            )
             .await
         {
             Ok((user, _, _)) => {
@@ -149,6 +158,7 @@ impl<State: Clone + 'static> ManifestRoute<State> {
                 ApiVersion::V2,
                 Method::GET,
                 "/missions",
+                "GET:missions",
                 None,
                 None,
             )

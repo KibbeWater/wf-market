@@ -41,6 +41,7 @@ impl<State: Clone + 'static> AchievementRoute<State> {
                 ApiVersion::V2,
                 Method::GET,
                 "/achievements",
+                "GET:achievements",
                 None,
                 None,
             )
@@ -79,6 +80,7 @@ impl<State: Clone + 'static> AchievementRoute<State> {
                 ApiVersion::V2,
                 Method::GET,
                 &format!("/achievements/user/{}", slug),
+                "GET:achievements:user",
                 None,
                 None,
             )
@@ -111,6 +113,7 @@ impl<State: Clone + 'static> AchievementRoute<State> {
                 ApiVersion::V2,
                 Method::GET,
                 &format!("/achievements/userId/{}", user_id),
+                "GET:achievements:userId",
                 None,
                 None,
             )

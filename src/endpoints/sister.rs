@@ -46,6 +46,7 @@ impl<State: Clone + 'static> SisterRoute<State> {
                 ApiVersion::V2,
                 Method::GET,
                 "/sister/weapons",
+                "GET:sister:weapons",
                 None,
                 None,
             )
@@ -77,6 +78,7 @@ impl<State: Clone + 'static> SisterRoute<State> {
                 ApiVersion::V2,
                 Method::GET,
                 &format!("/sister/weapon/{}", slug),
+                "GET:sister:weapon:slug",
                 None,
                 None,
             )
@@ -109,6 +111,7 @@ impl<State: Clone + 'static> SisterRoute<State> {
                 ApiVersion::V2,
                 Method::GET,
                 "/sister/ephemeras",
+                "GET:sister:ephemeras",
                 None,
                 None,
             )
@@ -146,6 +149,7 @@ impl<State: Clone + 'static> SisterRoute<State> {
                 ApiVersion::V2,
                 Method::GET,
                 "/sister/quirks",
+                "GET:sister:quirks",
                 None,
                 None,
             )

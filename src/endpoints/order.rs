@@ -47,6 +47,7 @@ impl<State: Clone + 'static> OrderRoute<State> {
                 ApiVersion::V2,
                 Method::GET,
                 &format!("/orders/{}", order_id),
+                "GET:orders:order_id",
                 None,
                 None,
             )
@@ -76,6 +77,7 @@ impl<State: Clone + 'static> OrderRoute<State> {
                 ApiVersion::V2,
                 Method::GET,
                 "/orders/recent",
+                "GET:orders:recent",
                 None,
                 None,
             )
@@ -106,6 +108,7 @@ impl<State: Clone + 'static> OrderRoute<State> {
                 ApiVersion::V2,
                 Method::GET,
                 &format!("/orders/item/{}", slug),
+                "GET:orders:item:slug",
                 None,
                 None,
             )
@@ -148,6 +151,7 @@ impl<State: Clone + 'static> OrderRoute<State> {
                 ApiVersion::V2,
                 Method::GET,
                 &format!("/orders/item/{}/top{}", slug, query),
+                "GET:orders:item:slug:top",
                 None,
                 None,
             )
@@ -217,6 +221,7 @@ where
                 ApiVersion::V2,
                 Method::GET,
                 "/orders/my",
+                "GET:orders:my",
                 None,
                 None,
             )
@@ -251,6 +256,7 @@ where
                 ApiVersion::V2,
                 Method::PATCH,
                 format!("/order/{}", order_id).as_str(),
+                "PATCH:order:order_id",
                 Some(json!(args)),
                 None,
             )
@@ -294,6 +300,7 @@ where
                 ApiVersion::V2,
                 Method::POST,
                 "/order",
+                "POST:order",
                 Some(json!(args)),
                 None,
             )
@@ -334,6 +341,7 @@ where
                 ApiVersion::V2,
                 Method::POST,
                 format!("/order/{}/close", order_id).as_str(),
+                "POST:order:order_id:close",
                 Some(json!({ "quantity": quantity })),
                 None,
             )
@@ -369,6 +377,7 @@ where
                 ApiVersion::V2,
                 Method::DELETE,
                 format!("/order/{}", order_id).as_str(),
+                "DELETE:order:order_id",
                 None,
                 None,
             )
