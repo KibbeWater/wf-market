@@ -12,6 +12,8 @@ pub enum Tier {
     Gold,
     #[serde(rename = "diamond")]
     Diamond,
+    #[serde(rename = "platinum")]
+    Platinum,
 }
 
 impl Tier {
@@ -22,7 +24,7 @@ impl Tier {
     pub fn is_premium(&self) -> bool {
         matches!(
             self,
-            Tier::Bronze | Tier::Silver | Tier::Gold | Tier::Diamond
+            Tier::Bronze | Tier::Silver | Tier::Gold | Tier::Diamond | Tier::Platinum
         )
     }
 }
