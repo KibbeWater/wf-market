@@ -191,6 +191,8 @@ pub struct ItemAttribute {
     pub value: f64,
     #[serde(default = "unknown_effect")] // Is set by the user
     pub effect: String,
+
+    pub properties: Option<serde_json::Value>, // Additional properties for the order
 }
 
 fn unknown_effect() -> String {
@@ -204,6 +206,11 @@ impl ItemAttribute {
             positive,
             value,
             effect: String::from("Unknown Effect"),
+            properties: None,
         }
+    }
+    pub fn set_properties(mut self, properties: serde_json::Value) -> Self {
+        self.properties = Some(properties);
+        self
     }
 }
