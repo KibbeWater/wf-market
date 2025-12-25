@@ -135,7 +135,7 @@ impl<State: Clone + 'static> AuctionRoute<State> {
                 {
                     list.filter_similarity(
                         filter.similarity.unwrap(),
-                        filter.similarity_attributes.clone().unwrap(),
+                        &filter.similarity_attributes.clone().unwrap(),
                     );
                 }
 

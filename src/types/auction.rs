@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 
 use crate::{enums::*, types::*};
 use uuid::Uuid;
@@ -135,51 +135,39 @@ impl AuctionItem {
     /// Compare this auction item's attributes (candidate) against the provided `attributes` (reference/base).
     /// - missing: in base but not in this item
     /// - extra:   in this item but not in base
-    pub fn apply_similarity(&mut self, attributes: Vec<ItemAttribute>) -> Similarity {
+    pub fn apply_similarity(&mut self, base: &[ItemAttribute]) -> Similarity {
         if self.item_type != AuctionType::Riven {
             return Similarity::default();
         }
 
-        let cand = self.attributes.clone().unwrap_or_default(); // this auction's attributes
-        let base_set: HashSet<(String, bool)> = attributes
-            .iter()
-            .map(|a| (a.url_name.clone(), a.positive))
-            .collect();
-        let cand_set: HashSet<(String, bool)> = cand
-            .iter()
-            .map(|a| (a.url_name.clone(), a.positive))
-            .collect();
+        let cand = self.attributes.as_deref().unwrap_or(&[]);
 
-        // missing = base \ cand
-        let mut missing: Vec<String> = base_set
+        let base_set: HashSet<_> = base.iter().map(AttrKey::from).collect();
+        let cand_set: HashSet<_> = cand.iter().map(AttrKey::from).collect();
+
+        let missing = base_set
             .difference(&cand_set)
-            .map(|(name, pos)| format!("{}:{}", name, pos))
+            .map(|k| format!("{}:{}", k.name, k.positive))
             .collect();
 
-        // extra = cand \ base
-        let mut extra: Vec<String> = cand_set
+        let extra = cand_set
             .difference(&base_set)
-            .map(|(name, pos)| format!("{}:{}", name, pos))
+            .map(|k| format!("{}:{}", k.name, k.positive))
             .collect();
 
-        // Deterministic order
-        missing.sort();
-        extra.sort();
-
-        // Jaccard similarity over unique keys
         let intersection = base_set.intersection(&cand_set).count() as f32;
         let union = base_set.union(&cand_set).count() as f32;
-        let score = if union > 0.0 {
-            intersection / union
-        } else {
-            -1.0
-        };
 
         let similarity = Similarity {
-            score,
+            score: if union > 0.0 {
+                intersection / union
+            } else {
+                -1.0
+            },
             missing,
             extra,
         };
+
         self.similarity = similarity.clone();
         similarity
     }

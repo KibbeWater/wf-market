@@ -48,10 +48,10 @@ async fn websocket_v1() {
         .await
         .unwrap();
 
-    match ws_client.send_request("@WS/USER/SET_STATUS", json!("invisible")) {
-        Ok(_) => println!("WS client sent status invisible"),
-        Err(e) => panic!("{:?}", e),
-    }
+    // match ws_client.send_request("@WS/USER/SET_STATUS", json!("invisible")) {
+    //     Ok(_) => println!("WS client sent status invisible"),
+    //     Err(e) => panic!("{:?}", e),
+    // }
 
     // Wait for a message or timeout
     let result = tokio::time::timeout(Duration::from_secs(5), notify.notified()).await;

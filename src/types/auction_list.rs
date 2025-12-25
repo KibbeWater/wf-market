@@ -17,6 +17,7 @@ pub trait AuctionLike {
     fn platinum(&self) -> i64;
     fn owner(&self) -> Option<UserShort>;
     fn to_auction(&self) -> Auction;
+    fn to_auction_mut(&mut self) -> &mut Auction;
 }
 
 // Implement trait for Auction
@@ -36,6 +37,9 @@ impl AuctionLike for Auction {
     fn to_auction(&self) -> Auction {
         self.clone()
     }
+    fn to_auction_mut(&mut self) -> &mut Auction {
+        self
+    }
 }
 
 // Implement trait for AuctionWithOwner
@@ -54,6 +58,9 @@ impl AuctionLike for AuctionWithOwner {
 
     fn to_auction(&self) -> Auction {
         self.auction.clone()
+    }
+    fn to_auction_mut(&mut self) -> &mut Auction {
+        &mut self.auction
     }
 }
 
@@ -213,20 +220,44 @@ impl<State: AuctionLike + Clone> AuctionList<State> {
     - attributes: Vec<ItemAttribute>: The item attributes to filter by.
     - exclude: bool: If true, excludes auctions with the specified similarity; otherwise, includes
     */
-    pub fn filter_similarity(&mut self, similarity: i64, attributes: Vec<ItemAttribute>) {
+    pub fn filter_similarity(&mut self, similarity: i64, attributes: &[ItemAttribute]) {
         let auctions = self
             .auctions
             .iter_mut()
             .filter_map(|o| {
-                let sim = o.to_auction().item.apply_similarity(attributes.clone());
+                let sim = o.to_auction_mut().item.apply_similarity(&attributes);
                 if sim.score >= (similarity as f32 / 100.0) {
                     Some(o.clone())
                 } else {
                     None
                 }
+                // o.to_auction().apply_similarity(&attributes);
             })
             .collect::<Vec<State>>();
         self.auctions = auctions;
+    }
+
+    // Sort by similarity score descending or ascending
+
+    pub fn sort_by_similarity(&mut self, descending: bool) {
+        if descending {
+            self.auctions.sort_by(|a, b| {
+                let sim_a = a.to_auction().item.similarity.score;
+                let sim_b = b.to_auction().item.similarity.score;
+                sim_a
+                    .partial_cmp(&sim_b)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+            return;
+        }
+
+        self.auctions.sort_by(|a, b| {
+            let sim_a = a.to_auction().item.similarity.score;
+            let sim_b = b.to_auction().item.similarity.score;
+            sim_b
+                .partial_cmp(&sim_a)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
     }
 
     /*

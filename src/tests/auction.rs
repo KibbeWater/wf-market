@@ -58,7 +58,7 @@ async fn search_auctions() {
         .unwrap();
 
     // Loop through the items and print them
-    items.filter_similarity(50, attributes);
+    items.filter_similarity(50, &attributes);
     println!("Total Auctions: {}", items.total_auctions());
     // Print the first item for brevity
     if items.auctions.is_empty() {
