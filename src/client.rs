@@ -394,7 +394,10 @@ impl<State: Clone + 'static> Client<State> {
                     Err(e) => Err(ApiError::ParsingError(error, e)),
                 }
             }
-            Err(_) => Err(ApiError::RequestError(error)),
+            Err(e) => {
+                error.set_content(format!("Request failed: {}", e));
+                Err(ApiError::RequestError(error))
+            },
         }
     }
 
