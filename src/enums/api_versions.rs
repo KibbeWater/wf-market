@@ -17,7 +17,7 @@ impl ApiVersion {
         match self {
             // ApiVersion::V1 => "ws://localhost:7369",
             ApiVersion::V1 => "wss://warframe.market/socket?platform=pc",
-            ApiVersion::V2 => "wss://warframe.market/socket-v2",
+            ApiVersion::V2 => "wss://ws.warframe.market/socket",
         }
     }
 }
