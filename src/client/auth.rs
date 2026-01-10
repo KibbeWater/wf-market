@@ -1,343 +1,193 @@
-use serde_json::json;
+//! Authentication handling for the client.
 
-use super::*;
-use crate::client::ws::WsClientBuilder;
-use crate::error::AuthError;
-use crate::types::http::APIV1Result;
-use crate::types::request::OrderCreationRequest;
-use crate::types::request::OrderUpdateParams;
-use crate::types::transaction::Transaction;
-use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
+
+use crate::error::{ApiErrorResponse, Error, Result};
+use crate::internal::{V1_API_URL, build_authenticated_client, build_rate_limiter};
+use crate::models::{Credentials, FullUser};
+
+use super::{Authenticated, Client, Unauthenticated};
+
+/// Login request body.
+#[derive(Serialize)]
+struct LoginRequest<'a> {
+    auth_type: &'static str,
+    email: &'a str,
+    password: &'a str,
+    device_id: &'a str,
+}
+
+/// Login response from the V1 API.
+#[derive(Deserialize)]
+struct LoginResponse {
+    payload: LoginPayload,
+}
+
+#[derive(Deserialize)]
+struct LoginPayload {
+    user: FullUser,
+}
 
 impl Client<Unauthenticated> {
-    /**
-    Constructs a new client
+    /// Login with credentials to get an authenticated client.
+    ///
+    /// This method consumes the unauthenticated client and returns an
+    /// authenticated one. The credentials will be updated with the
+    /// authentication token for future session restoration.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use wf_market::{Client, Credentials};
+    ///
+    /// async fn example() -> wf_market::Result<()> {
+    ///     let client = Client::builder().build()?;
+    ///     
+    ///     let creds = Credentials::new(
+    ///         "user@example.com",
+    ///         "password",
+    ///         Credentials::generate_device_id(),
+    ///     );
+    ///     
+    ///     let client = client.login(creds).await?;
+    ///     
+    ///     // Now we can access authenticated endpoints
+    ///     let orders = client.my_orders().await?;
+    ///     
+    ///     Ok(())
+    /// }
+    /// ```
+    ///
+    /// # Token-based Login
+    ///
+    /// If the credentials already contain a token (from a previous session),
+    /// the token will be validated and used directly without re-authenticating.
+    ///
+    /// ```no_run
+    /// use wf_market::{Client, Credentials};
+    ///
+    /// async fn restore_session() -> wf_market::Result<()> {
+    ///     let creds = Credentials::from_token(
+    ///         "user@example.com",
+    ///         "device-id",
+    ///         "saved-jwt-token",
+    ///     );
+    ///     
+    ///     let client = Client::builder().build()?.login(creds).await?;
+    ///     Ok(())
+    /// }
+    /// ```
+    pub async fn login(self, mut credentials: Credentials) -> Result<Client<Authenticated>> {
+        let token = if let Some(token) = credentials.token() {
+            // Token-based: use existing token
+            token.to_string()
+        } else if let Some(password) = credentials.password() {
+            // Password-based: perform login
+            let token = self
+                .perform_login(&credentials.email, password, &credentials.device_id)
+                .await?;
+            credentials.set_token(token.clone());
+            token
+        } else {
+            return Err(Error::auth(
+                "Credentials must have either password or token",
+            ));
+        };
 
-    # Returns
-    A client? duh?
-    */
-    pub fn new() -> Self {
-        Client {
-            http: build_http(None),
-            user: None,
-            orders: Vec::new(),
-            status: StatusType::Offline,
-            items_cache: Vec::new(),
-            rivens_cache: Vec::new(),
-            token: None,
-            device_id: None,
-            limiter: build_limiter(REQUESTS_PER_SECOND).into(),
-            _state: PhantomData,
-        }
+        // Build authenticated HTTP client
+        let http = build_authenticated_client(
+            self.config.platform,
+            self.config.language,
+            self.config.crossplay,
+            &token,
+        )
+        .map_err(|e| Error::Network(e))?;
+
+        // Reuse or rebuild rate limiter
+        let limiter = if self.config.rate_limit == 3 {
+            self.limiter
+        } else {
+            build_rate_limiter(self.config.rate_limit)
+        };
+
+        Ok(Client::new_authenticated(
+            http,
+            self.config,
+            limiter,
+            credentials,
+        ))
     }
 
-    /**
-    Log in using username and password
+    /// Perform the actual login request.
+    async fn perform_login(&self, email: &str, password: &str, device_id: &str) -> Result<String> {
+        let request = LoginRequest {
+            auth_type: "header",
+            email,
+            password,
+            device_id,
+        };
 
-    # Arguments
-    - `username`: Users account username
-    - `password`: Users account password
-    - `device_id`: Unique identifier across the device, should not change between instances
-
-    # Returns
-    An authenticated client
-    */
-    pub async fn login(
-        self,
-        username: &str,
-        password: &str,
-        device_id: &str,
-    ) -> Result<Client<Authenticated>, AuthError> {
-        let mut map = HashMap::new();
-        map.insert("auth_type", "header");
-        map.insert("email", username);
-        map.insert("password", password);
-        map.insert("device_id", device_id);
-
-        match self
+        let response = self
             .http
-            .post(V1_API.to_owned() + "/auth/signin")
-            .json(&map)
+            .post(format!("{}/auth/signin", V1_API_URL))
             .header("Authorization", "JWT")
+            .json(&request)
             .send()
             .await
-        {
-            Ok(resp) => {
-                let headers = resp.headers().clone();
-                let body = resp.text().await.unwrap();
+            .map_err(|e| Error::Network(e))?;
 
-                let data: APIV1Result<AuthResp> =
-                    serde_json::from_str(&body).map_err(|_| AuthError::ParsingError)?;
+        let status = response.status();
+        let headers = response.headers().clone();
 
-                match headers.get("Authorization") {
-                    Some(header) => {
-                        let token: String = header
-                            .to_str()
-                            .map_err(|_| AuthError::ParsingError)?
-                            .to_string();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
 
-                        let jwt = &token[4..]; // Remove the "JWT " from the token.
-                        let http = build_http(Some(format!("Bearer {}", jwt)));
-
-                        let mut authed_client = Client {
-                            http,
-                            user: Some(data.payload.user.clone()),
-                            orders: Vec::new(),
-                            status: data.payload.user.status_type,
-                            items_cache: self.items_cache,
-                            rivens_cache: self.rivens_cache,
-                            token: Some(jwt.to_string()),
-                            device_id: Some(device_id.parse().unwrap()),
-                            limiter: build_limiter(REQUESTS_PER_SECOND).into(),
-                            _state: PhantomData,
-                        };
-
-                        authed_client.refresh().await.map_err(|_| {
-                            AuthError::Unknown(
-                                "Unable to refresh user after authentication".to_string(),
-                            )
-                        })?;
-
-                        Ok(authed_client)
-                    }
-                    None => Err(AuthError::ParsingError),
-                }
+            // Try to parse as API error
+            if let Ok(error_response) = serde_json::from_str::<ApiErrorResponse>(&body) {
+                return Err(Error::auth_with_details(
+                    format!("Login failed: {}", status),
+                    error_response,
+                ));
             }
-            Err(e) => Err(AuthError::Unknown(format!("Unknown Error: {:?}", e))),
-        }
-    }
 
-    fn build_auth_payload<'a>(
-        &self,
-        username: &'a str,
-        password: &'a str,
-        device_id: &'a str,
-    ) -> HashMap<&'a str, &'a str> {
-        let mut map = HashMap::new();
-        map.insert("auth_type", "header");
-        map.insert("email", username);
-        map.insert("password", password);
-        map.insert("device_id", device_id);
-        map
+            return Err(Error::auth(format!(
+                "Login failed with status {}: {}",
+                status, body
+            )));
+        }
+
+        // Extract token from Authorization header
+        let auth_header = headers
+            .get("Authorization")
+            .ok_or_else(|| Error::auth("No Authorization header in response"))?
+            .to_str()
+            .map_err(|_| Error::auth("Invalid Authorization header encoding"))?;
+
+        // Token is prefixed with "JWT "
+        let token = auth_header
+            .strip_prefix("JWT ")
+            .ok_or_else(|| Error::auth("Invalid Authorization header format"))?
+            .to_string();
+
+        Ok(token)
     }
 }
 
-impl Client<Authenticated> {
-    /**
-    Refresh the users data, updates the state of `orders` and `user`
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    # Returns
-    - A FullUser object
-    */
-    pub async fn refresh<'a>(&mut self) -> Result<FullUser, ApiError> {
-        let user: Result<ApiResult<FullUser>, ApiError> =
-            self.call_api(Method::Get, "/me", None::<&NoBody>).await;
-        let orders: Result<ApiResult<Vec<OrderItem>>, ApiError> = self
-            .call_api(Method::Get, "/orders/my", None::<&NoBody>)
-            .await;
-
-        let order_instances = orders?
-            .data
-            .iter()
-            .map(|order| Order::new_owned(order))
-            .collect();
-        let user_data = user?.data;
-
-        self.orders = order_instances;
-        self.user = Some(user_data.clone());
-
-        Ok(user_data)
-    }
-
-    /**
-    Get the authenticated users orders
-
-    # Returns
-    List of all users orders
-    */
-    pub async fn my_orders(&self) -> Result<Vec<Order<Owned>>, ApiError> {
-        let items: Result<ApiResult<Vec<OrderItem>>, ApiError> = self
-            .call_api(Method::Get, "/orders/my", None::<&NoBody>)
-            .await;
-
-        Ok(items?
-            .data
-            .iter()
-            .map(|order| Order::new_owned(order))
-            .collect())
-    }
-
-    /**
-    Take ownership of an order, converts an `<Unowned>` order to an `<Owned>` one
-
-    # Note
-    This is using the stored information from the last `.refresh()`,
-    without a WebSocket connection this may be out of date unless manually updated
-
-    # Arguments
-    - `order`: Managed Order object
-
-    # Returns
-    - An Owned order
-    */
-    pub fn take_order(&self, order: Order<Unowned>) -> Result<Order<Owned>, ApiError> {
-        if self
-            .orders
-            .iter()
-            .find(|_order| _order.object.id == order.object.id)
-            .is_some()
-        {
-            Ok(Order::new_owned(&order.get_type()))
-        } else {
-            Err(ApiError::Unauthorized)
-        }
-    }
-
-    /**
-    Return the authentication token
-
-    # Returns
-    The users JWT token
-    */
-    pub fn get_token(&self) -> String {
-        // Only accessible on authed clients, if this panics we got hit by a cosmic particle
-        self.token.clone().unwrap()
-    }
-
-    /**
-    Returns the clients device id
-
-    # Returns
-    The Device ID used when authenticating
-    */
-    pub fn get_device_id(&self) -> String {
-        // Again, panics, cosmic particle, you get the gist of it now
-        self.device_id.clone().unwrap()
-    }
-
-    /**
-    Create a WebSocket builder
-
-    # Returns
-    A WsClient Builder
-    */
-    pub fn create_websocket(&self) -> WsClientBuilder {
-        WsClientBuilder::new(self.get_token(), self.get_device_id())
-    }
-
-    /**
-    Update order information
-
-    # Arguments
-    - `order`: The [`Order`][crate::client::order::Order] to update
-
-    # Example
-    ```rust
-    use wf_market::{
-        client::Client,
-        utils::generate_device_id,
-        types::request::OrderUpdateParams,
-    };
-
-    async fn main() {
-        let mut client = {
-            // device_id should be stored and reused
-            Client::new()
-                .login("username", "password", generate_device_id().as_str())
-                .await.unwrap()
+    #[test]
+    fn test_login_request_serialization() {
+        let request = LoginRequest {
+            auth_type: "header",
+            email: "test@example.com",
+            password: "password123",
+            device_id: "device-123",
         };
 
-        if let Ok(orders) = client.my_orders().await {
-            for order in orders {
-                client.update_order(order, OrderUpdateParams {
-                    platinum: Some(1), // Make all our orders basically free!
-                    ..Default::default()
-                })
-            }
-        }
-    }
-    ```
-
-    # Returns
-    The updated order
-    */
-    pub async fn update_order(
-        &self,
-        order: Order<Owned>,
-        args: OrderUpdateParams,
-    ) -> Result<Order<Owned>, ApiError> {
-        let order: Result<ApiResult<OrderItem>, ApiError> = self
-            .call_api(
-                Method::Patch,
-                format!("/order/{}", order.object.id).as_str(),
-                Some(&args),
-            )
-            .await;
-
-        Ok(Order::new_owned(&order?.data))
-    }
-
-    /**
-     * Create a new order
-     * # Arguments
-     * - `args`: The [`OrderCreationRequest`][crate::types::request::OrderCreationRequest] to create the order with
-     * # Returns
-     * The created order
-     */
-    pub async fn create_order(&self, args: OrderCreationRequest) -> Result<Order<Owned>, ApiError> {
-        let order: Result<ApiResult<OrderItem>, ApiError> =
-            self.call_api(Method::Post, "/order", Some(&args)).await;
-
-        Ok(Order::new_owned(&order?.data))
-    }
-    /**
-    Close a portion or all of an existing order.
-    Allows you to close part of an open order by specifying a quantity to reduce.
-    For example, if your order was initially created with a quantity of 20, and you send a request to close 8 units, the remaining quantity will be 12.
-    If you close the entire remaining quantity, the order will be considered fully closed and removed.
-    # Arguments
-    - `order_id`: The ID of the order to delete
-    - `quantity`: The quantity of the order to delete
-    # Returns
-    - `Ok(Transaction)` if the order was successfully deleted
-    - `Err(ApiError)` if there was an error deleting the order
-    */
-
-    pub async fn close_order(
-        &self,
-        order_id: &str,
-        quantity: u32,
-    ) -> Result<Transaction, ApiError> {
-        let transaction: Result<ApiResult<Transaction>, ApiError> = self
-            .call_api(
-                Method::Post,
-                format!("/order/{}/close", order_id).as_str(),
-                Some(&json!({
-                    "quantity": quantity
-                })),
-            )
-            .await;
-
-        Ok(transaction?.data)
-    }
-
-    /**
-     * Delete an order
-     * # Arguments
-     * - `order_id`: The ID of the order to delete
-     * # Returns
-     * - `Ok(Order)` if the order was successfully deleted
-     * - `Err(ApiError)` if there was an error deleting the order
-     */
-    pub async fn delete_order(&self, order_id: &str) -> Result<Order, ApiError> {
-        let order: Result<ApiResult<OrderItem>, ApiError> = self
-            .call_api(
-                Method::Delete,
-                format!("/order/{}", order_id).as_str(),
-                None::<&NoBody>,
-            )
-            .await;
-
-        Ok(Order::new(&order?.data))
+        let json = serde_json::to_string(&request).unwrap();
+        assert!(json.contains("\"auth_type\":\"header\""));
+        assert!(json.contains("\"email\":\"test@example.com\""));
     }
 }

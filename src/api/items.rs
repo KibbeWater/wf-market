@@ -1,0 +1,209 @@
+//! Items API endpoints.
+
+use std::time::Duration;
+
+use crate::cache::ApiCache;
+use crate::client::{AuthState, Client};
+use crate::error::{ApiErrorResponse, Error, Result};
+use crate::internal::BASE_URL;
+use crate::models::Item;
+
+use super::ApiResponse;
+
+impl<S: AuthState> Client<S> {
+    /// Fetch all tradable items directly from the API.
+    ///
+    /// This always makes a network request. Consider using [`get_items`](Self::get_items)
+    /// with a cache for better performance.
+    ///
+    /// # Caching Recommendation
+    ///
+    /// This endpoint returns ~4000 items and the list rarely changes
+    /// (only when new items are added to the game). Consider caching
+    /// the result for 12-24 hours.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use wf_market::Client;
+    ///
+    /// async fn example() -> wf_market::Result<()> {
+    ///     let client = Client::builder().build()?;
+    ///     let items = client.fetch_items().await?;
+    ///     println!("Found {} items", items.len());
+    ///     Ok(())
+    /// }
+    /// ```
+    pub async fn fetch_items(&self) -> Result<Vec<Item>> {
+        self.wait_for_rate_limit().await;
+
+        let response = self
+            .http
+            .get(format!("{}/items", BASE_URL))
+            .send()
+            .await
+            .map_err(Error::Network)?;
+
+        let status = response.status();
+
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+
+            if let Ok(error_response) = serde_json::from_str::<ApiErrorResponse>(&body) {
+                return Err(Error::api_with_response(
+                    status,
+                    "Failed to fetch items",
+                    error_response,
+                ));
+            }
+
+            return Err(Error::api(
+                status,
+                format!("Failed to fetch items: {}", body),
+            ));
+        }
+
+        let body = response.text().await.map_err(Error::Network)?;
+
+        let api_response: ApiResponse<Vec<Item>> =
+            serde_json::from_str(&body).map_err(|e| Error::parse_with_body(e.to_string(), body))?;
+
+        Ok(api_response.data)
+    }
+
+    /// Get all tradable items, using cache if provided.
+    ///
+    /// If `cache` is `Some`, uses cached data if available, otherwise
+    /// fetches from the API and populates the cache.
+    ///
+    /// If `cache` is `None`, fetches directly from the API (equivalent
+    /// to [`fetch_items`](Self::fetch_items)).
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use wf_market::{Client, ApiCache};
+    ///
+    /// async fn example() -> wf_market::Result<()> {
+    ///     let client = Client::builder().build()?;
+    ///     let mut cache = ApiCache::new();
+    ///
+    ///     // First call fetches from API
+    ///     let items = client.get_items(Some(&mut cache)).await?;
+    ///
+    ///     // Second call uses cache
+    ///     let items = client.get_items(Some(&mut cache)).await?;
+    ///
+    ///     // Without cache
+    ///     let items = client.get_items(None).await?;
+    ///
+    ///     Ok(())
+    /// }
+    /// ```
+    pub async fn get_items(&self, cache: Option<&mut ApiCache>) -> Result<Vec<Item>> {
+        match cache {
+            Some(c) => {
+                if let Some(items) = c.get_items() {
+                    return Ok(items.to_vec());
+                }
+
+                let items = self.fetch_items().await?;
+                c.set_items(items.clone());
+                Ok(items)
+            }
+            None => self.fetch_items().await,
+        }
+    }
+
+    /// Get items with a maximum cache age (TTL).
+    ///
+    /// If the cache is older than `max_age`, it will be invalidated
+    /// and fresh data will be fetched.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use wf_market::{Client, ApiCache};
+    /// use std::time::Duration;
+    ///
+    /// async fn example() -> wf_market::Result<()> {
+    ///     let client = Client::builder().build()?;
+    ///     let mut cache = ApiCache::new();
+    ///
+    ///     // Refresh if cache is older than 24 hours
+    ///     let items = client.get_items_with_ttl(
+    ///         Some(&mut cache),
+    ///         Duration::from_secs(24 * 60 * 60),
+    ///     ).await?;
+    ///
+    ///     Ok(())
+    /// }
+    /// ```
+    pub async fn get_items_with_ttl(
+        &self,
+        cache: Option<&mut ApiCache>,
+        max_age: Duration,
+    ) -> Result<Vec<Item>> {
+        if let Some(c) = cache {
+            c.invalidate_items_if_older_than(max_age);
+            self.get_items(Some(c)).await
+        } else {
+            self.fetch_items().await
+        }
+    }
+
+    /// Fetch a single item by its slug.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use wf_market::Client;
+    ///
+    /// async fn example() -> wf_market::Result<()> {
+    ///     let client = Client::builder().build()?;
+    ///     let item = client.get_item("nikana_prime_set").await?;
+    ///     println!("Item: {}", item.name());
+    ///     Ok(())
+    /// }
+    /// ```
+    pub async fn get_item(&self, slug: &str) -> Result<Item> {
+        self.wait_for_rate_limit().await;
+
+        let response = self
+            .http
+            .get(format!("{}/item/{}", BASE_URL, slug))
+            .send()
+            .await
+            .map_err(Error::Network)?;
+
+        let status = response.status();
+
+        if status == reqwest::StatusCode::NOT_FOUND {
+            return Err(Error::not_found(format!("Item not found: {}", slug)));
+        }
+
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+
+            if let Ok(error_response) = serde_json::from_str::<ApiErrorResponse>(&body) {
+                return Err(Error::api_with_response(
+                    status,
+                    format!("Failed to fetch item: {}", slug),
+                    error_response,
+                ));
+            }
+
+            return Err(Error::api(
+                status,
+                format!("Failed to fetch item {}: {}", slug, body),
+            ));
+        }
+
+        let body = response.text().await.map_err(Error::Network)?;
+
+        let api_response: ApiResponse<Item> =
+            serde_json::from_str(&body).map_err(|e| Error::parse_with_body(e.to_string(), body))?;
+
+        Ok(api_response.data)
+    }
+}

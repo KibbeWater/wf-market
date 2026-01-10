@@ -1,374 +1,347 @@
-/*!
-Provides `Client` struct for interacting with the Warframe Market API.
+//! HTTP client for the warframe.market API.
+//!
+//! This module provides the [`Client`] type which is the main entry point
+//! for interacting with the warframe.market API.
+//!
+//! # Type States
+//!
+//! The client uses a type-state pattern to provide compile-time safety:
+//!
+//! - [`Client<Unauthenticated>`]: Can only access public endpoints
+//! - [`Client<Authenticated>`]: Can access all endpoints including user-specific ones
+//!
+//! # Example
+//!
+//! ```no_run
+//! use wf_market::{Client, Credentials};
+//!
+//! async fn example() -> wf_market::Result<()> {
+//!     // Create an unauthenticated client
+//!     let client = Client::builder().build()?;
+//!
+//!     // Fetch public data
+//!     let items = client.fetch_items().await?;
+//!
+//!     // Login to access authenticated endpoints
+//!     let creds = Credentials::new("email", "password", Credentials::generate_device_id());
+//!     let client = client.login(creds).await?;
+//!
+//!     // Now we can access user-specific endpoints
+//!     let my_orders = client.my_orders().await?;
+//!
+//!     Ok(())
+//! }
+//! ```
 
-# Examples
-
-Running unauthenticated:
-```rust
-use wf_market::client::Client;
-
-let client = Client::new();
-```
-
-Running authenticated:
-```rust
-use wf_market::{
-    client::Client,
-    utils::generate_device_id,
-};
-
-async fn main() {
-    let client = {
-        // device_id should be stored and reused
-        Client::new()
-            .login("username", "password", generate_device_id().as_str()).await.unwrap()
-    };
-
-    let user = client.user.unwrap();
-    println!("Logged in as: {}", user.name);
-}
-```
-*/
-
-// Submodules
 mod auth;
-mod constants;
-mod item;
-mod order;
-mod riven;
-mod utils;
-pub mod ws;
+mod builder;
 
-use crate::error::{ApiError, ApiErrorBody, ErrorResponse};
-use crate::types::filter::OrdersTopFilters;
-use crate::types::http::ApiResult;
-use crate::types::item::{Item as ItemObject, Order as OrderItem, OrderWithUser, OrdersTopResult};
-use crate::types::riven::Riven as RivenObject;
-use crate::types::user::{FullUser, StatusType};
-use governor::RateLimiter;
-use governor::clock::DefaultClock;
-use governor::state::{InMemoryState, NotKeyed};
-use reqwest::Method as HttpMethod;
-use serde::Serialize;
+pub use builder::*;
+
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-pub use auth::*;
-use constants::*;
-pub use item::*;
-pub use order::*;
-pub use riven::*;
-use utils::*;
+use crate::error::{Error, Result};
+use crate::internal::ApiRateLimiter;
+use crate::models::{Credentials, Language, Platform};
 
+// Sealed trait pattern for auth states
+mod private {
+    pub trait Sealed {}
+    impl Sealed for super::Unauthenticated {}
+    impl Sealed for super::Authenticated {}
+}
+
+/// Marker trait for authentication states.
+pub trait AuthState: private::Sealed {}
+
+/// Unauthenticated state - can only access public endpoints.
+#[derive(Debug, Clone, Copy)]
 pub struct Unauthenticated;
+impl AuthState for Unauthenticated {}
+
+/// Authenticated state - can access all endpoints.
+#[derive(Debug, Clone, Copy)]
 pub struct Authenticated;
+impl AuthState for Authenticated {}
 
-pub struct Client<State = Unauthenticated> {
+/// Client configuration.
+#[derive(Debug, Clone)]
+pub struct ClientConfig {
+    /// Gaming platform (default: PC)
+    pub platform: Platform,
+    /// Language for responses (default: English)
+    pub language: Language,
+    /// Enable cross-play orders (default: true)
+    pub crossplay: bool,
+    /// Rate limit (requests per second, default: 3)
+    pub rate_limit: u32,
+}
+
+impl Default for ClientConfig {
+    fn default() -> Self {
+        Self {
+            platform: Platform::Pc,
+            language: Language::English,
+            crossplay: true,
+            rate_limit: 3,
+        }
+    }
+}
+
+/// HTTP client for the warframe.market API.
+///
+/// The client is parameterized by an authentication state:
+///
+/// - `Client<Unauthenticated>`: Can only access public endpoints
+/// - `Client<Authenticated>`: Can access all endpoints
+///
+/// Use [`Client::builder()`] to create a new client.
+pub struct Client<S: AuthState = Unauthenticated> {
     pub(crate) http: reqwest::Client,
-    pub user: Option<FullUser>,
-    pub orders: Vec<Order<Owned>>,
-    pub status: StatusType,
-    items_cache: Vec<Item>,
-    rivens_cache: Vec<Riven>,
-    token: Option<String>,
-    device_id: Option<String>,
-    limiter: Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>,
-    _state: PhantomData<State>,
+    pub(crate) config: ClientConfig,
+    pub(crate) limiter: Arc<ApiRateLimiter>,
+    pub(crate) credentials: Option<Credentials>,
+    pub(crate) _state: PhantomData<S>,
 }
 
-#[derive(Serialize)]
-struct NoBody;
+impl Client<Unauthenticated> {
+    /// Create a new client builder.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use wf_market::{Client, Platform, Language};
+    ///
+    /// let client = Client::builder()
+    ///     .platform(Platform::Pc)
+    ///     .language(Language::English)
+    ///     .build()?;
+    /// # Ok::<(), wf_market::Error>(())
+    /// ```
+    pub fn builder() -> ClientBuilder {
+        ClientBuilder::default()
+    }
 
-pub enum Method {
-    Get,
-    Post,
-    Patch,
-    Put,
-    Delete,
-}
+    /// Create a client and login in one step.
+    ///
+    /// This is a convenience method equivalent to:
+    /// ```no_run
+    /// # use wf_market::{Client, Credentials};
+    /// # async fn example() -> wf_market::Result<()> {
+    /// # let credentials = Credentials::new("", "", "");
+    /// let client = Client::builder().build()?.login(credentials).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use wf_market::{Client, Credentials};
+    ///
+    /// async fn example() -> wf_market::Result<()> {
+    ///     let creds = Credentials::new("email", "password", Credentials::generate_device_id());
+    ///     let client = Client::from_credentials(creds).await?;
+    ///     Ok(())
+    /// }
+    /// ```
+    pub async fn from_credentials(credentials: Credentials) -> Result<Client<Authenticated>> {
+        Self::builder().build()?.login(credentials).await
+    }
 
-impl<State> Client<State> {
-    /**
-    INTERNAL: Makes a request to the API, returning the response as a deserialized type.
+    /// Create a client with custom config and login in one step.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use wf_market::{Client, ClientConfig, Credentials, Platform};
+    ///
+    /// async fn example() -> wf_market::Result<()> {
+    ///     let config = ClientConfig {
+    ///         platform: Platform::Ps4,
+    ///         ..Default::default()
+    ///     };
+    ///     let creds = Credentials::new("email", "password", Credentials::generate_device_id());
+    ///     let client = Client::from_credentials_with_config(creds, config).await?;
+    ///     Ok(())
+    /// }
+    /// ```
+    pub async fn from_credentials_with_config(
+        credentials: Credentials,
+        config: ClientConfig,
+    ) -> Result<Client<Authenticated>> {
+        Self::builder()
+            .config(config)
+            .build()?
+            .login(credentials)
+            .await
+    }
 
+    /// Validate credentials without fully logging in.
+    ///
+    /// This is useful for checking if a saved token is still valid
+    /// before creating a full authenticated client.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use wf_market::{Client, Credentials};
+    ///
+    /// async fn example() -> wf_market::Result<()> {
+    ///     let saved = Credentials::from_token("email", "device-id", "saved-token");
+    ///
+    ///     if Client::validate_credentials(&saved).await? {
+    ///         let client = Client::from_credentials(saved).await?;
+    ///         println!("Session restored!");
+    ///     } else {
+    ///         println!("Token expired, please login again");
+    ///     }
+    ///     Ok(())
+    /// }
+    /// ```
+    pub async fn validate_credentials(credentials: &Credentials) -> Result<bool> {
+        use crate::internal::{BASE_URL, build_authenticated_client};
 
-    # Arguments
-    - `method`: The HTTP method to use (GET, POST, PUT, DELETE).
-    - `path`: The path to the API endpoint. (e.g., "/me").
-    - `body`: An optional body to send with the request, serializable as JSON.
+        if let Some(token) = credentials.token() {
+            let http = build_authenticated_client(Platform::Pc, Language::English, true, token)
+                .map_err(|e| Error::Network(e))?;
 
-    # Returns
-    - A `Result` containing the deserialized response or an `ApiError` on failure.
-    */
-    pub(crate) async fn call_api<T: serde::de::DeserializeOwned>(
-        &self,
-        method: Method,
-        path: &str,
-        body: Option<&impl Serialize>,
-    ) -> Result<T, ApiError> {
-        let url = BASE_URL.to_owned() + path;
-        let builder = self.http.request(transform_method(method), &url);
-
-        let builder = if let Some(body) = body {
-            builder.json(body)
-        } else {
-            builder
-        };
-
-        self.limiter.until_ready().await;
-
-        match builder.send().await {
-            Ok(resp) => {
-                let status = resp.status();
-
-                let body = resp
-                    .text()
-                    .await
-                    .map_err(|_| ApiError::Unknown("Error".to_string()))?;
-
-                // Check if the status code indicates an error
-                match status {
-                    reqwest::StatusCode::OK | reqwest::StatusCode::CREATED => {}
-                    reqwest::StatusCode::UNAUTHORIZED => {
-                        return Err(ApiError::Unauthorized);
-                    }
-                    reqwest::StatusCode::NOT_FOUND => {
-                        return Err(ApiError::NotFound(format!(
-                            "Resource not found: {}, Message: {}",
-                            url, body
-                        )));
-                    }
-                    reqwest::StatusCode::BAD_REQUEST | reqwest::StatusCode::FORBIDDEN => {
-                        match serde_json::from_str::<ErrorResponse>(&body) {
-                            Ok(api_result) => {
-                                return Err(ApiError::WFMError(api_result));
-                            }
-                            Err(e) => {
-                                return Err(ApiError::ParsingError(
-                                    format!(
-                                        "Error Parsing Bad Request Error: {:?}, Message: {}",
-                                        e, body
-                                    )
-                                    .to_string(),
-                                ));
-                            }
-                        }
-                    }
-                    _ => {
-                        return Err(ApiError::Unknown(format!(
-                            "Unexpected status code: {}",
-                            status
-                        )));
-                    }
-                }
-
-                let data = serde_json::from_str::<T>(&body);
-
-                match data {
-                    Ok(data) => Ok(data),
-                    Err(err) => Err(ApiError::ParsingError(
-                        format!("Error Parsing: {:?}, Body: {}", err, body).to_string(),
-                    )),
-                }
+            match http.get(format!("{}/me", BASE_URL)).send().await {
+                Ok(resp) if resp.status().is_success() => Ok(true),
+                Ok(resp) if resp.status() == reqwest::StatusCode::UNAUTHORIZED => Ok(false),
+                Ok(resp) => Err(Error::api(
+                    resp.status(),
+                    format!("Unexpected response: {}", resp.status()),
+                )),
+                Err(e) => Err(Error::Network(e)),
             }
-            Err(_) => Err(ApiError::RequestError),
-        }
-    }
-
-    /**
-    Fetch all listed items from the WFM API
-
-    # Returns
-    List of all listed items
-    */
-    pub async fn get_items(&self) -> Result<Vec<Item<Regular>>, ApiError> {
-        if !self.items_cache.is_empty() {
-            let mut new_items = Vec::new();
-            new_items.clone_from(&self.items_cache);
-            return Ok(new_items);
-        }
-
-        let items: Result<ApiResult<Vec<ItemObject>>, ApiError> =
-            self.call_api(Method::Get, "/items", None::<&NoBody>).await;
-
-        Ok(items?.data.iter().map(|item| Item::new(item)).collect())
-    }
-
-    /**
-    Fetch an item by an identifiable slug
-
-    # Returns
-    Full item object (currently the same from `get_items()`)
-    */
-    pub async fn get_item(&self, slug: &str) -> Result<Item<Regular>, ApiError> {
-        let items: Result<ApiResult<ItemObject>, ApiError> = self
-            .call_api(
-                Method::Get,
-                format!("/item/{}", slug).as_str(),
-                None::<&NoBody>,
-            )
-            .await;
-
-        Ok(Item::new(&items?.data))
-    }
-
-    /**
-    Fetch all orders from users online within the last 7 days
-
-    # Arguments
-    - `slug`: The item whose orders you want to fetch
-
-    # Returns
-    A list of orders
-    */
-    pub async fn get_orders(&self, slug: &str) -> Result<Vec<Order<Unowned>>, ApiError> {
-        let items: Result<ApiResult<Vec<OrderWithUser>>, ApiError> = self
-            .call_api(
-                Method::Get,
-                format!("/orders/item/{}", slug).as_str(),
-                None::<&NoBody>,
-            )
-            .await;
-
-        Ok(items?
-            .data
-            .iter()
-            .map(|order| Order::new(&order.downgrade()))
-            .collect())
-    }
-
-    /**
-    Fetch the top 5 orders for the specified slug
-
-    # Arguments
-    - `slug`: The item whose orders you want to fetch
-
-    # Returns
-    Total of 10 orders, top 5 buy/sell orders
-    */
-    pub async fn get_orders_top(
-        &self,
-        slug: &str,
-        filters: Option<OrdersTopFilters>,
-    ) -> Result<Vec<Order<Unowned>>, ApiError> {
-        let query: String = if let Some(filters) = filters.clone() {
-            let params = serde_urlencoded::to_string(filters)
-                .map_err(|_| ApiError::ParsingError("Unable to serialize filters".to_string()))?;
-            format!("?{}", params)
         } else {
-            String::new()
-        };
-
-        let items: Result<ApiResult<OrdersTopResult>, ApiError> = self
-            .call_api(
-                Method::Get,
-                format!("/orders/item/{}/top{}", slug, query).as_str(),
-                None::<&NoBody>,
-            )
-            .await;
-
-        let data = items?.data;
-
-        let is_filtering_status = if let Some(filters) = filters.clone() {
-            filters.user_activity.is_some()
-        } else {
-            false
-        };
-
-        let buy: Vec<Order<Unowned>> = data
-            .buy
-            .iter()
-            .filter(|o| {
-                is_filtering_status
-                    && o.user.status_type == filters.clone().unwrap().user_activity.unwrap()
-            })
-            .map(|order| Order::new(&order.downgrade()))
-            .collect();
-        let sell: Vec<Order<Unowned>> = data
-            .sell
-            .iter()
-            .filter(|o| {
-                is_filtering_status
-                    && o.user.status_type == filters.clone().unwrap().user_activity.unwrap()
-            })
-            .map(|order| Order::new(&order.downgrade()))
-            .collect();
-
-        let total: Vec<Order<Unowned>> = [buy, sell].concat();
-
-        Ok(total)
-    }
-
-    /**
-    Get the Item Type of an Order, fetches from updated list of items
-
-    # Arguments
-    - `order`: The order to get the type of
-
-    # Returns
-    A managed [`Item`][crate::client::item::Item] object
-    */
-    pub async fn get_order_item(&self, order: &Order) -> Result<Item<Regular>, ApiError> {
-        if let Some(item) = self
-            .get_items()
-            .await?
-            .iter()
-            .find(|i| i.get_type().id == order.object.item_id)
-        {
-            return Ok(item.clone());
+            // Password-based credentials can't be validated without logging in
+            // Return true since we'll find out during login if they're invalid
+            Ok(true)
         }
-
-        Err(ApiError::Unknown("Item not found".to_string()))
     }
 
-    /**
-    Get the order from an id
-
-    # Arguments
-    - `id`: An order ID
-
-    # Returns
-    A managed [`Order`][crate::client::order::Order] object
-    */
-    pub async fn get_order(&self, id: &str) -> Result<Order<Unowned>, ApiError> {
-        let order: Result<ApiResult<OrderItem>, ApiError> = self
-            .call_api(
-                Method::Get,
-                format!("/order/{}", id).as_str(),
-                None::<&NoBody>,
-            )
-            .await;
-
-        Ok(Order::new(&order?.data))
-    }
-    /**
-    Fetch all listed rivens from the WFM API
-
-    # Returns
-    List of all listed rivens
-    */
-    pub async fn get_rivens(&self) -> Result<Vec<Riven>, ApiError> {
-        if !self.rivens_cache.is_empty() {
-            let mut new_items = Vec::new();
-            new_items.clone_from(&self.rivens_cache);
-            return Ok(new_items);
+    /// Create an unauthenticated client (internal use).
+    pub(crate) fn new_unauthenticated(
+        http: reqwest::Client,
+        config: ClientConfig,
+        limiter: Arc<ApiRateLimiter>,
+    ) -> Self {
+        Self {
+            http,
+            config,
+            limiter,
+            credentials: None,
+            _state: PhantomData,
         }
-
-        let rivens: Result<ApiResult<Vec<RivenObject>>, ApiError> = self
-            .call_api(Method::Get, "/riven/weapons", None::<&NoBody>)
-            .await;
-
-        Ok(rivens?.data.iter().map(|riven| Riven::new(riven)).collect())
     }
 }
 
-// Honestly idk why i didn't just use reqwest::Method directly, but here we are
-fn transform_method(method: Method) -> HttpMethod {
-    match method {
-        Method::Get => HttpMethod::GET,
-        Method::Post => HttpMethod::POST,
-        Method::Patch => HttpMethod::PATCH,
-        Method::Put => HttpMethod::PUT,
-        Method::Delete => HttpMethod::DELETE,
+impl<S: AuthState> Client<S> {
+    /// Get the client configuration.
+    pub fn config(&self) -> &ClientConfig {
+        &self.config
+    }
+
+    /// Get the platform this client is configured for.
+    pub fn platform(&self) -> Platform {
+        self.config.platform
+    }
+
+    /// Get the language this client is configured for.
+    pub fn language(&self) -> Language {
+        self.config.language
+    }
+
+    /// Wait for rate limiter before making a request.
+    pub(crate) async fn wait_for_rate_limit(&self) {
+        self.limiter.until_ready().await;
+    }
+}
+
+impl Client<Authenticated> {
+    /// Get the current credentials (with token) for persistence.
+    ///
+    /// The returned credentials can be serialized and stored, then
+    /// used with [`Credentials::from_token()`] to restore the session.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use wf_market::{Client, Credentials};
+    ///
+    /// async fn save_session(client: &Client<wf_market::client::Authenticated>) -> std::io::Result<()> {
+    ///     let creds = client.credentials();
+    ///     let json = serde_json::to_string(creds)?;
+    ///     std::fs::write("session.json", json)?;
+    ///     Ok(())
+    /// }
+    /// ```
+    pub fn credentials(&self) -> &Credentials {
+        self.credentials
+            .as_ref()
+            .expect("Authenticated client must have credentials")
+    }
+
+    /// Export credentials for saving (convenience method).
+    ///
+    /// This clones the credentials so they can be serialized and stored.
+    pub fn export_session(&self) -> Credentials {
+        self.credentials().clone()
+    }
+
+    /// Get the authentication token.
+    pub fn token(&self) -> &str {
+        self.credentials()
+            .token()
+            .expect("Authenticated client must have token")
+    }
+
+    /// Get the device ID.
+    pub fn device_id(&self) -> &str {
+        &self.credentials().device_id
+    }
+
+    /// Create an authenticated client (internal use).
+    pub(crate) fn new_authenticated(
+        http: reqwest::Client,
+        config: ClientConfig,
+        limiter: Arc<ApiRateLimiter>,
+        credentials: Credentials,
+    ) -> Self {
+        Self {
+            http,
+            config,
+            limiter,
+            credentials: Some(credentials),
+            _state: PhantomData,
+        }
+    }
+}
+
+// Clone implementations
+impl Clone for Client<Unauthenticated> {
+    fn clone(&self) -> Self {
+        Self {
+            http: self.http.clone(),
+            config: self.config.clone(),
+            limiter: self.limiter.clone(),
+            credentials: None,
+            _state: PhantomData,
+        }
+    }
+}
+
+impl Clone for Client<Authenticated> {
+    fn clone(&self) -> Self {
+        Self {
+            http: self.http.clone(),
+            config: self.config.clone(),
+            limiter: self.limiter.clone(),
+            credentials: self.credentials.clone(),
+            _state: PhantomData,
+        }
     }
 }
