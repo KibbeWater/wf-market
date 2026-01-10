@@ -16,7 +16,7 @@ pub mod user;
 pub use common::{
     Activity, ActivityType, Language, OrderType, Platform, Rarity, RivenType, UserStatus,
 };
-pub use credentials::Credentials;
+pub use credentials::{Credentials, WithPassword};
 pub use item::{Item, ItemTranslation, ModView, SculptureView};
 pub use order::{Order, OrderListing, OwnedOrder, OwnedOrderId, TopOrders};
 pub use request::{CreateOrder, OrderFilters, UpdateOrder};

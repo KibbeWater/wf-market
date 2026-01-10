@@ -82,9 +82,19 @@ impl WebSocket {
                         let (internal_tx, mut internal_rx) = mpsc::unbounded_channel::<WsMessage>();
 
                         // Take the receiver for the write task
-                        let msg_rx_for_write = msg_rx
-                            .take()
-                            .expect("msg_rx should always be Some at loop start");
+                        let msg_rx_for_write = match msg_rx.take() {
+                            Some(rx) => rx,
+                            None => {
+                                // This should never happen, but handle gracefully
+                                if let Some(ref handler) = event_handler {
+                                    handler(WsEvent::Disconnected {
+                                        reason: "Internal error: message receiver lost".to_string(),
+                                    })
+                                    .await;
+                                }
+                                break;
+                            }
+                        };
 
                         // Write task - wraps receiver in Option for cancellation recovery
                         let write_task = tokio::spawn(async move {

@@ -81,9 +81,15 @@ impl CreateOrder {
     /// # Arguments
     ///
     /// * `item_id` - The item's ID or slug
-    /// * `platinum` - Price in platinum
-    /// * `quantity` - Number of items to sell
+    /// * `platinum` - Price in platinum (must be > 0)
+    /// * `quantity` - Number of items to sell (must be > 0)
+    ///
+    /// # Panics
+    ///
+    /// Panics in debug builds if `platinum` or `quantity` is 0.
     pub fn sell(item_id: impl Into<String>, platinum: u32, quantity: u32) -> Self {
+        debug_assert!(platinum > 0, "platinum must be greater than 0");
+        debug_assert!(quantity > 0, "quantity must be greater than 0");
         Self {
             item_id: item_id.into(),
             order_type: OrderType::Sell,
@@ -104,9 +110,15 @@ impl CreateOrder {
     /// # Arguments
     ///
     /// * `item_id` - The item's ID or slug
-    /// * `platinum` - Price in platinum
-    /// * `quantity` - Number of items to buy
+    /// * `platinum` - Price in platinum (must be > 0)
+    /// * `quantity` - Number of items to buy (must be > 0)
+    ///
+    /// # Panics
+    ///
+    /// Panics in debug builds if `platinum` or `quantity` is 0.
     pub fn buy(item_id: impl Into<String>, platinum: u32, quantity: u32) -> Self {
+        debug_assert!(platinum > 0, "platinum must be greater than 0");
+        debug_assert!(quantity > 0, "quantity must be greater than 0");
         Self {
             item_id: item_id.into(),
             order_type: OrderType::Buy,
@@ -217,13 +229,23 @@ impl UpdateOrder {
     }
 
     /// Set the new price.
+    ///
+    /// # Panics
+    ///
+    /// Panics in debug builds if `platinum` is 0.
     pub fn platinum(mut self, platinum: u32) -> Self {
+        debug_assert!(platinum > 0, "platinum must be greater than 0");
         self.platinum = Some(platinum);
         self
     }
 
     /// Set the new quantity.
+    ///
+    /// # Panics
+    ///
+    /// Panics in debug builds if `quantity` is 0.
     pub fn quantity(mut self, quantity: u32) -> Self {
+        debug_assert!(quantity > 0, "quantity must be greater than 0");
         self.quantity = Some(quantity);
         self
     }

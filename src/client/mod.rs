@@ -279,6 +279,12 @@ impl Client<Authenticated> {
     ///     Ok(())
     /// }
     /// ```
+    ///
+    /// # Panics
+    ///
+    /// This method uses `expect()` internally but should never panic because
+    /// `Client<Authenticated>` can only be constructed with valid credentials.
+    /// If this panics, it indicates an internal invariant violation.
     pub fn credentials(&self) -> &Credentials {
         self.credentials
             .as_ref()
@@ -293,6 +299,12 @@ impl Client<Authenticated> {
     }
 
     /// Get the authentication token.
+    ///
+    /// # Panics
+    ///
+    /// This method uses `expect()` internally but should never panic because
+    /// `Client<Authenticated>` can only be constructed with valid credentials
+    /// that include a token. If this panics, it indicates an internal invariant violation.
     pub fn token(&self) -> &str {
         self.credentials()
             .token()
