@@ -340,6 +340,15 @@ impl<S: AuthState> Client<S> {
 
         if !status.is_success() {
             let body = response.text().await.unwrap_or_default();
+
+            if let Ok(error_response) = serde_json::from_str::<ApiErrorResponse>(&body) {
+                return Err(Error::api_with_response(
+                    status,
+                    format!("Failed to fetch order: {}", id),
+                    error_response,
+                ));
+            }
+
             return Err(Error::api(
                 status,
                 format!("Failed to fetch order: {}", body),

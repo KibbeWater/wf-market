@@ -403,7 +403,12 @@ impl TopOrderFilters {
     }
 
     /// Filter by mod rank less than this value.
+    ///
+    /// # Panics
+    ///
+    /// Panics in debug builds if `rank` is 0.
     pub fn rank_lt(mut self, rank: u8) -> Self {
+        debug_assert!(rank > 0, "rank_lt must be greater than 0");
         self.rank_lt = Some(rank);
         self
     }
@@ -415,7 +420,12 @@ impl TopOrderFilters {
     }
 
     /// Filter by charges less than this value.
+    ///
+    /// # Panics
+    ///
+    /// Panics in debug builds if `charges` is 0.
     pub fn charges_lt(mut self, charges: u8) -> Self {
+        debug_assert!(charges > 0, "charges_lt must be greater than 0");
         self.charges_lt = Some(charges);
         self
     }
@@ -427,7 +437,12 @@ impl TopOrderFilters {
     }
 
     /// Filter by amber stars less than this value.
+    ///
+    /// # Panics
+    ///
+    /// Panics in debug builds if `stars` is 0.
     pub fn amber_stars_lt(mut self, stars: u8) -> Self {
+        debug_assert!(stars > 0, "amber_stars_lt must be greater than 0");
         self.amber_stars_lt = Some(stars);
         self
     }
@@ -439,7 +454,12 @@ impl TopOrderFilters {
     }
 
     /// Filter by cyan stars less than this value.
+    ///
+    /// # Panics
+    ///
+    /// Panics in debug builds if `stars` is 0.
     pub fn cyan_stars_lt(mut self, stars: u8) -> Self {
+        debug_assert!(stars > 0, "cyan_stars_lt must be greater than 0");
         self.cyan_stars_lt = Some(stars);
         self
     }
@@ -492,7 +512,8 @@ impl TopOrderFilters {
             params.push(format!("cyanStarsLt={}", v));
         }
         if let Some(ref v) = self.subtype {
-            params.push(format!("subtype={}", v));
+            // URL-encode the subtype to handle special characters safely
+            params.push(format!("subtype={}", urlencoding::encode(v)));
         }
 
         if params.is_empty() {
