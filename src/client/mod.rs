@@ -205,7 +205,7 @@ impl Client<Unauthenticated> {
 
         if let Some(token) = credentials.token() {
             let http = build_authenticated_client(Platform::Pc, Language::English, true, token)
-                .map_err(|e| Error::Network(e))?;
+                .map_err(Error::Network)?;
 
             match http.get(format!("{}/me", BASE_URL)).send().await {
                 Ok(resp) if resp.status().is_success() => Ok(true),

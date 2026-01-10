@@ -83,7 +83,7 @@ impl ClientBuilder {
             self.config.language,
             self.config.crossplay,
         )
-        .map_err(|e| Error::Network(e))?;
+        .map_err(Error::Network)?;
 
         let limiter = if self.config.rate_limit == 3 {
             build_default_rate_limiter()

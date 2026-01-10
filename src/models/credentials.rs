@@ -190,6 +190,7 @@ impl Credentials {
     }
 
     /// Clear the token (e.g., on logout or token expiration).
+    #[allow(dead_code)]
     pub(crate) fn clear_token(&mut self) {
         self.token = None;
     }

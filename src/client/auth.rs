@@ -19,11 +19,13 @@ struct LoginRequest<'a> {
 
 /// Login response from the V1 API.
 #[derive(Deserialize)]
+#[allow(dead_code)]
 struct LoginResponse {
     payload: LoginPayload,
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 struct LoginPayload {
     user: FullUser,
 }
@@ -101,7 +103,7 @@ impl Client<Unauthenticated> {
             self.config.crossplay,
             &token,
         )
-        .map_err(|e| Error::Network(e))?;
+        .map_err(Error::Network)?;
 
         // Reuse or rebuild rate limiter
         let limiter = if self.config.rate_limit == 3 {
@@ -134,7 +136,7 @@ impl Client<Unauthenticated> {
             .json(&request)
             .send()
             .await
-            .map_err(|e| Error::Network(e))?;
+            .map_err(Error::Network)?;
 
         let status = response.status();
         let headers = response.headers().clone();

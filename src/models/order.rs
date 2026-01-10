@@ -170,8 +170,8 @@ impl std::ops::Deref for OrderListing {
 /// operations target orders owned by the current user. It can only
 /// be obtained from:
 ///
-/// - [`Client::my_orders()`] - returns orders with `OwnedOrderId`
-/// - [`Client::create_order()`] - returns the created order
+/// - `Client::my_orders()` - returns orders with `OwnedOrderId`
+/// - `Client::create_order()` - returns the created order
 /// - [`OwnedOrderId::from_raw()`] - for restoring saved IDs
 ///
 /// # Example
