@@ -10,7 +10,7 @@ pub struct SigninResponse {
     pub background: Option<String>,
     pub crossplay: bool,
     pub platform: String,
-    pub reputation: i64,
+    pub reputation: f64,
     pub has_mail: bool,
     pub region: String,
     pub written_reviews: i64,

@@ -39,7 +39,7 @@ pub struct UserPrivate {
     #[serde(rename = "aboutRaw", skip_serializing_if = "Option::is_none")]
     pub about_raw: Option<String>,
     /// Reputation score.
-    pub reputation: i16,
+    pub reputation: f64,
     /// In-game mastery level.
     #[serde(rename = "masteryRank")]
     pub mastery_rank: i8,

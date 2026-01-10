@@ -19,7 +19,7 @@ pub struct User {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub about: Option<String>,
     /// User's reputation score.
-    pub reputation: i16,
+    pub reputation: f64,
     /// Optional in-game mastery level.
     #[serde(rename = "masteryLevel", skip_serializing_if = "Option::is_none")]
     pub mastery_level: Option<i8>,
