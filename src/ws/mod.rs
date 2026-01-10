@@ -49,7 +49,7 @@ mod events;
 mod message;
 mod subscription;
 
-pub use builder::WebSocketBuilder;
+pub use builder::{DEFAULT_USER_AGENT, WebSocketBuilder};
 pub use client::WebSocket;
 pub use events::{Activity, ActivityType, UserStatus as WsUserStatus, WsEvent};
 pub use subscription::Subscription;

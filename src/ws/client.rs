@@ -35,6 +35,7 @@ impl WebSocket {
         let initial_subscriptions = builder.subscriptions;
         let auto_reconnect = builder.auto_reconnect;
         let reconnect_delay = builder.reconnect_delay;
+        let user_agent = builder.user_agent;
 
         let (msg_tx, msg_rx) = mpsc::unbounded_channel::<WsMessage>();
         let subscriptions = Arc::new(RwLock::new(HashSet::new()));
@@ -50,7 +51,7 @@ impl WebSocket {
                 let mut request = WS_URL.into_client_request().expect("Invalid WebSocket URL");
                 let headers = request.headers_mut();
                 headers.insert("Sec-WebSocket-Protocol", WS_PROTOCOL.parse().unwrap());
-                headers.insert("User-Agent", "wf-market-rs/0.2.0".parse().unwrap());
+                headers.insert("User-Agent", user_agent.parse().unwrap());
 
                 match connect_async(request).await {
                     Ok((ws_stream, _)) => {
@@ -306,10 +307,11 @@ impl WebSocket {
                     let status: UserStatus =
                         serde_json::from_value(payload["status"].clone()).unwrap_or_default();
 
-                    // API uses "statusSetAt" for when status was set
+                    // API sends "statusSetAt" - timestamp when status was set
+                    // Note: Field is named status_until for backwards compatibility,
+                    // but semantically represents when the status was set, not when it expires
                     let status_until = payload["statusSetAt"]
                         .as_str()
-                        .or_else(|| payload["statusUntil"].as_str())
                         .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
                         .map(|dt| dt.with_timezone(&chrono::Utc));
 

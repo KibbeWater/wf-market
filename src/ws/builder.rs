@@ -47,12 +47,16 @@ pub type BoxedEventHandler =
 /// }
 /// # fn main() {}
 /// ```
+/// Default User-Agent for WebSocket connections.
+pub const DEFAULT_USER_AGENT: &str = concat!("wf-market-rs/", env!("CARGO_PKG_VERSION"));
+
 pub struct WebSocketBuilder<'a> {
     pub(crate) client: &'a Client<Authenticated>,
     pub(crate) event_handler: Option<BoxedEventHandler>,
     pub(crate) subscriptions: Vec<Subscription>,
     pub(crate) auto_reconnect: bool,
     pub(crate) reconnect_delay: Duration,
+    pub(crate) user_agent: String,
 }
 
 impl<'a> WebSocketBuilder<'a> {
@@ -64,6 +68,7 @@ impl<'a> WebSocketBuilder<'a> {
             subscriptions: Vec::new(),
             auto_reconnect: true,
             reconnect_delay: Duration::from_secs(5),
+            user_agent: DEFAULT_USER_AGENT.to_string(),
         }
     }
 
@@ -143,6 +148,23 @@ impl<'a> WebSocketBuilder<'a> {
     /// Default: 5 seconds
     pub fn reconnect_delay(mut self, delay: Duration) -> Self {
         self.reconnect_delay = delay;
+        self
+    }
+
+    /// Set a custom User-Agent header for the WebSocket connection.
+    ///
+    /// Default: `wf-market-rs/{version}`
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let ws = client.websocket()
+    ///     .user_agent("my-app/1.0.0")
+    ///     .connect()
+    ///     .await?;
+    /// ```
+    pub fn user_agent(mut self, user_agent: impl Into<String>) -> Self {
+        self.user_agent = user_agent.into();
         self
     }
 
