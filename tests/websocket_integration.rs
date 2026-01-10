@@ -3,6 +3,10 @@
 //! These tests require valid warframe.market credentials set via environment variables
 //! or in a `.env` file.
 //!
+//! This module is only compiled when the `websocket` feature is enabled.
+
+#![cfg(feature = "websocket")]
+//!
 //! ## Setup
 //!
 //! 1. Copy `.env.example` to `.env` and fill in your credentials
