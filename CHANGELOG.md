@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-01-10
+
 ### Fixed
 
 - **WebSocket TLS**: Added TLS support for `tokio-tungstenite` when using `rustls-tls` feature. WebSocket connections to `wss://` now work correctly.
@@ -19,18 +21,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Configurable User-Agent**: `WebSocketBuilder::user_agent()` method to set custom User-Agent header
+- **`DEFAULT_USER_AGENT`**: Exported constant for reference when building custom User-Agent strings
+- **JWT Token Management**: `update_token` example to fetch and cache JWT tokens in `.env` file
 - **Integration Tests**: WebSocket integration tests with `.env` file support
   - `test_ws_connect_and_authenticate` - Verify TLS and authentication
   - `test_ws_receives_online_count` - Verify event reception
   - `test_ws_subscribe_new_orders` - Verify subscription flow
   - `test_ws_set_status` - Verify status commands
   - `test_ws_dynamic_subscription` - Verify dynamic subscription/unsubscription
-- **Test Utilities**: `tests/common/mod.rs` with credential loading helpers
+- **Test Utilities**: `tests/common/mod.rs` with credential loading and error handling
+- **`AuthError`**: Detailed error types for authentication failures (token expired, rate limited, etc.)
 - **Example Config**: `.env.example` file for test credentials
 
 ### Changed
 
+- WebSocket User-Agent now uses `CARGO_PKG_VERSION` to stay in sync with crate version
 - WebSocket example now supports loading credentials from `.env` file
+- Integration tests prefer JWT token over email/password to avoid rate limiting
 
 ## [0.2.1] - 2025-01-10
 
