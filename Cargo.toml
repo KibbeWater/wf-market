@@ -1,27 +1,65 @@
 [package]
 name = "wf-market"
-version = "0.1.11"
+version = "0.2.0"
 edition = "2024"
-description = "A small Rust library to interact with Warframe Market APIs"
-repository = "https://github.com/KibbeWater/wf-market"
+rust-version = "1.85"
 license = "GPL-3.0-only"
+description = "A Rust client library for the warframe.market API"
+repository = "https://github.com/KibbeWater/wf-market"
 homepage = "https://github.com/KibbeWater/wf-market"
+documentation = "https://docs.rs/wf-market"
 readme = "README.md"
 authors = ["KibbeWater <35224538+KibbeWater@users.noreply.github.com>"]
-keywords = ["warframe", "market"]
+keywords = ["warframe", "market", "api", "trading", "game"]
+categories = ["api-bindings", "games"]
+
+[features]
+default = ["rustls-tls"]
+rustls-tls = ["reqwest/rustls-tls"]
+native-tls = ["reqwest/native-tls", "tokio-tungstenite?/native-tls"]
+websocket = ["dep:tokio-tungstenite", "dep:futures-util"]
 
 [dependencies]
-tokio = {version =  "1.45.1", features = ["full", "rt-multi-thread"] }
-serde = {version =  "1.0.219", features = ["derive"] }
-serde_json = "1.0.140"
-serde_urlencoded = "0.7.1"
-reqwest = { version = "0.12.19", features = ["json"] }
-rand = "0.9.1"
-tokio-tungstenite = { version = "0.26.2", features = ["native-tls"] }
-futures-util = "0.3.31"
-uuid = {version = "1.17.0", features = ["v4"] }
-chrono = "0.4.41"
-governor = { version = "0.10.0", features = ["std"] }
+# Async runtime
+tokio = { version = "1.45", features = ["rt-multi-thread", "sync", "time", "macros"] }
+
+# HTTP client
+reqwest = { version = "0.12", default-features = false, features = ["json"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_urlencoded = "0.7"
+
+# Error handling
+thiserror = "2.0"
+
+# Utilities
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.17", features = ["v4"] }
+governor = { version = "0.10", default-features = false, features = ["std"] }
+
+# WebSocket (optional)
+tokio-tungstenite = { version = "0.26", optional = true }
+futures-util = { version = "0.3", optional = true }
 
 [dev-dependencies]
+tokio = { version = "1.45", features = ["full", "test-util"] }
 dotenv = "0.15"
+
+[[example]]
+name = "basic_usage"
+path = "examples/basic_usage.rs"
+
+[[example]]
+name = "create_orders"
+path = "examples/create_orders.rs"
+
+[[example]]
+name = "session_persistence"
+path = "examples/session_persistence.rs"
+
+[[example]]
+name = "websocket"
+path = "examples/websocket.rs"
+required-features = ["websocket"]
