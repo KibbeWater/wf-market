@@ -239,6 +239,13 @@ impl WebSocket {
     }
 
     /// Parse a WebSocket message into an event.
+    ///
+    /// Routes follow the format: `@wfm|type/path` or `@wfm|type/path:parameter`
+    /// Examples from the API:
+    /// - `@wfm|cmd/auth/signIn:ok` -> Authenticated
+    /// - `@wfm|event/reports/online` -> OnlineCount
+    /// - `@wfm|event/status/set` -> StatusUpdate
+    /// - `@wfm|event/subscriptions/newOrder` -> OrderCreated
     fn parse_event(msg: &WsMessage) -> WsEvent {
         let route = match ParsedRoute::parse(&msg.route) {
             Some(r) => r,
@@ -250,26 +257,12 @@ impl WebSocket {
             }
         };
 
-        match (route.module.as_str(), route.action.as_str()) {
-            // Reports
-            ("@reports", "onlineCount") => {
-                if let Some(ref payload) = msg.payload {
-                    let connections = payload["connections"].as_u64().unwrap_or(0);
-                    let authorized = payload["authorized"].as_u64().unwrap_or(0);
-                    WsEvent::OnlineCount {
-                        connections,
-                        authorized,
-                    }
-                } else {
-                    WsEvent::OnlineCount {
-                        connections: 0,
-                        authorized: 0,
-                    }
-                }
-            }
+        // Match on (msg_type, path) from the parsed route
+        match (route.msg_type.as_str(), route.path.as_str()) {
+            // === Command responses ===
 
-            // Authentication
-            ("@user", "signIn") => match route.parameter.as_deref() {
+            // Authentication response: @wfm|cmd/auth/signIn:ok or @wfm|cmd/auth/signIn:error
+            ("cmd", "auth/signIn") => match route.parameter.as_deref() {
                 Some("ok") => WsEvent::Authenticated,
                 Some("error") => WsEvent::AuthenticationFailed {
                     error: msg
@@ -285,14 +278,38 @@ impl WebSocket {
                 },
             },
 
-            // Status updates
-            ("@user", "statusUpdate") => {
+            // === Events ===
+
+            // Online count: @wfm|event/reports/online
+            // Payload: {"connections": 79086, "authorizedUsers": 46183}
+            ("event", "reports/online") => {
+                if let Some(ref payload) = msg.payload {
+                    let connections = payload["connections"].as_u64().unwrap_or(0);
+                    // Note: API uses "authorizedUsers" not "authorized"
+                    let authorized = payload["authorizedUsers"].as_u64().unwrap_or(0);
+                    WsEvent::OnlineCount {
+                        connections,
+                        authorized,
+                    }
+                } else {
+                    WsEvent::OnlineCount {
+                        connections: 0,
+                        authorized: 0,
+                    }
+                }
+            }
+
+            // Status update: @wfm|event/status/set
+            // Payload: {"status": "invisible", "statusSetAt": "2026-01-10T20:16:19Z"}
+            ("event", "status/set") => {
                 if let Some(ref payload) = msg.payload {
                     let status: UserStatus =
                         serde_json::from_value(payload["status"].clone()).unwrap_or_default();
 
-                    let status_until = payload["statusUntil"]
+                    // API uses "statusSetAt" for when status was set
+                    let status_until = payload["statusSetAt"]
                         .as_str()
+                        .or_else(|| payload["statusUntil"].as_str())
                         .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
                         .map(|dt| dt.with_timezone(&chrono::Utc));
 
@@ -313,11 +330,53 @@ impl WebSocket {
                 }
             }
 
-            // Session revoked
-            ("@user", "revoke") => WsEvent::SessionRevoked,
+            // New order from subscription: @wfm|event/subscriptions/newOrder
+            ("event", "subscriptions/newOrder") => {
+                if let Some(ref payload) = msg.payload {
+                    if let Ok(order) = serde_json::from_value::<OrderListing>(payload.clone()) {
+                        return WsEvent::OrderCreated { order };
+                    }
+                }
+                WsEvent::Unknown {
+                    route: msg.route.clone(),
+                    payload: msg.payload.clone().unwrap_or_default(),
+                }
+            }
 
-            // Verification update
-            ("@user", "verificationUpdate") => {
+            // Order updated: @wfm|event/subscriptions/orderUpdated
+            ("event", "subscriptions/orderUpdated") => {
+                if let Some(ref payload) = msg.payload {
+                    if let Ok(order) = serde_json::from_value::<OrderListing>(payload.clone()) {
+                        return WsEvent::OrderUpdated { order };
+                    }
+                }
+                WsEvent::Unknown {
+                    route: msg.route.clone(),
+                    payload: msg.payload.clone().unwrap_or_default(),
+                }
+            }
+
+            // Order removed: @wfm|event/subscriptions/orderRemoved
+            ("event", "subscriptions/orderRemoved") => {
+                if let Some(ref payload) = msg.payload {
+                    let order_id = payload["id"]
+                        .as_str()
+                        .or_else(|| payload["orderId"].as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    WsEvent::OrderRemoved { order_id }
+                } else {
+                    WsEvent::OrderRemoved {
+                        order_id: String::new(),
+                    }
+                }
+            }
+
+            // Session revoked: @wfm|event/auth/revoke
+            ("event", "auth/revoke") => WsEvent::SessionRevoked,
+
+            // Verification update: @wfm|event/user/verificationUpdate
+            ("event", "user/verificationUpdate") => {
                 if let Some(ref payload) = msg.payload {
                     WsEvent::VerificationUpdate {
                         ingame_name: payload["ingameName"].as_str().unwrap_or("").to_string(),
@@ -331,18 +390,23 @@ impl WebSocket {
                 }
             }
 
-            // Ban/warn events
-            ("@user", "banned") => {
+            // Ban event: @wfm|event/user/banned
+            ("event", "user/banned") => {
                 if let Some(ref payload) = msg.payload {
                     let until = payload["banUntil"]
                         .as_str()
+                        .or_else(|| payload["until"].as_str())
                         .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
                         .map(|dt| dt.with_timezone(&chrono::Utc))
                         .unwrap_or_else(chrono::Utc::now);
 
                     WsEvent::Banned {
                         until,
-                        message: payload["banMessage"].as_str().unwrap_or("").to_string(),
+                        message: payload["banMessage"]
+                            .as_str()
+                            .or_else(|| payload["message"].as_str())
+                            .unwrap_or("")
+                            .to_string(),
                     }
                 } else {
                     WsEvent::Banned {
@@ -352,32 +416,23 @@ impl WebSocket {
                 }
             }
 
-            ("@user", "warned") => WsEvent::Warned {
+            // Warning event: @wfm|event/user/warned
+            ("event", "user/warned") => WsEvent::Warned {
                 message: msg
                     .payload
                     .as_ref()
-                    .and_then(|p| p["warnMessage"].as_str())
+                    .and_then(|p| p["warnMessage"].as_str().or_else(|| p["message"].as_str()))
                     .unwrap_or("")
                     .to_string(),
             },
 
-            ("@user", "banLifted") => WsEvent::BanLifted,
-            ("@user", "warningLifted") => WsEvent::WarningLifted,
+            // Ban lifted: @wfm|event/user/banLifted
+            ("event", "user/banLifted") => WsEvent::BanLifted,
 
-            // Order events
-            ("@wfm", "orderNew") | ("@wfm", "event/order/new") => {
-                if let Some(ref payload) = msg.payload {
-                    if let Ok(order) = serde_json::from_value::<OrderListing>(payload.clone()) {
-                        return WsEvent::OrderCreated { order };
-                    }
-                }
-                WsEvent::Unknown {
-                    route: msg.route.clone(),
-                    payload: msg.payload.clone().unwrap_or_default(),
-                }
-            }
+            // Warning lifted: @wfm|event/user/warningLifted
+            ("event", "user/warningLifted") => WsEvent::WarningLifted,
 
-            // Fallback
+            // Fallback for unknown events
             _ => WsEvent::Unknown {
                 route: msg.route.clone(),
                 payload: msg.payload.clone().unwrap_or_default(),

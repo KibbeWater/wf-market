@@ -89,15 +89,13 @@ impl Subscription {
                 platform,
                 crossplay,
             } => {
-                let mut payload = serde_json::json!({
+                // Always include platform (default to "pc" if not specified)
+                let platform_str = platform.map(|p| p.as_header_value()).unwrap_or("pc");
+
+                serde_json::json!({
+                    "platform": platform_str,
                     "crossplay": crossplay,
-                });
-
-                if let Some(p) = platform {
-                    payload["platform"] = serde_json::json!(p);
-                }
-
-                payload
+                })
             }
             Self::Item { item_id } => {
                 serde_json::json!({
@@ -140,5 +138,33 @@ mod tests {
         let sub = Subscription::item("test-item");
         let payload = sub.to_payload();
         assert_eq!(payload["itemId"], "test-item");
+    }
+
+    #[test]
+    fn test_new_orders_payload_default_platform() {
+        let sub = Subscription::all_new_orders();
+        let payload = sub.to_payload();
+        assert_eq!(payload["platform"], "pc");
+        assert_eq!(payload["crossplay"], true);
+    }
+
+    #[test]
+    fn test_new_orders_payload_with_platform() {
+        let sub = Subscription::new_orders_for(Platform::Ps4);
+        let payload = sub.to_payload();
+        assert_eq!(payload["platform"], "ps4");
+        assert_eq!(payload["crossplay"], true);
+    }
+
+    #[test]
+    fn test_subscribe_route() {
+        let sub = Subscription::all_new_orders();
+        assert_eq!(sub.subscribe_route(), "@wfm|cmd/subscribe/newOrders");
+    }
+
+    #[test]
+    fn test_unsubscribe_route() {
+        let sub = Subscription::item("test");
+        assert_eq!(sub.unsubscribe_route(), "@wfm|cmd/unsubscribe/item");
     }
 }

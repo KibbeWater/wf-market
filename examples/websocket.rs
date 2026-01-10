@@ -8,7 +8,7 @@
 //! wf-market = { version = "0.2", features = ["websocket"] }
 //! ```
 //!
-//! Set the following environment variables:
+//! Set credentials via environment variables or .env file:
 //! - WFM_EMAIL: Your warframe.market email
 //! - WFM_PASSWORD: Your warframe.market password
 //!
@@ -22,9 +22,13 @@ use wf_market::{Client, Credentials};
 
 #[tokio::main]
 async fn main() -> wf_market::Result<()> {
+    // Load .env file if present
+    let _ = dotenv::dotenv();
+
     // Load credentials
-    let email = env::var("WFM_EMAIL").expect("WFM_EMAIL not set");
-    let password = env::var("WFM_PASSWORD").expect("WFM_PASSWORD not set");
+    let email = env::var("WFM_EMAIL").expect("WFM_EMAIL not set (use .env file or environment)");
+    let password =
+        env::var("WFM_PASSWORD").expect("WFM_PASSWORD not set (use .env file or environment)");
 
     println!("=== Logging in ===");
     let creds = Credentials::new(&email, &password, Credentials::generate_device_id());

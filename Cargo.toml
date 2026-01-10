@@ -15,7 +15,7 @@ categories = ["api-bindings", "games"]
 
 [features]
 default = ["rustls-tls"]
-rustls-tls = ["reqwest/rustls-tls"]
+rustls-tls = ["reqwest/rustls-tls", "tokio-tungstenite?/rustls-tls-native-roots"]
 native-tls = ["reqwest/native-tls", "tokio-tungstenite?/native-tls"]
 websocket = ["dep:tokio-tungstenite", "dep:futures-util"]
 

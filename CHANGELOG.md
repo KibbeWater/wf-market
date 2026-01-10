@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **WebSocket TLS**: Added TLS support for `tokio-tungstenite` when using `rustls-tls` feature. WebSocket connections to `wss://` now work correctly.
+- **WebSocket Protocol**: Fixed message route format to match actual API (`@wfm|cmd/...` and `@wfm|event/...` instead of `@user/...`)
+- **WebSocket Events**: Fixed event parsing to match actual API payloads:
+  - `OnlineCount` now correctly reads `authorizedUsers` field
+  - `StatusUpdate` now correctly reads `statusSetAt` field
+  - Added `OrderUpdated` and `OrderRemoved` event handling
+- **Subscription Payloads**: Subscriptions now always include `platform` field (defaults to "pc")
+
+### Added
+
+- **Integration Tests**: WebSocket integration tests with `.env` file support
+  - `test_ws_connect_and_authenticate` - Verify TLS and authentication
+  - `test_ws_receives_online_count` - Verify event reception
+  - `test_ws_subscribe_new_orders` - Verify subscription flow
+  - `test_ws_set_status` - Verify status commands
+  - `test_ws_dynamic_subscription` - Verify dynamic subscription/unsubscription
+- **Test Utilities**: `tests/common/mod.rs` with credential loading helpers
+- **Example Config**: `.env.example` file for test credentials
+
+### Changed
+
+- WebSocket example now supports loading credentials from `.env` file
+
 ## [0.2.1] - 2025-01-10
 
 ### Added
