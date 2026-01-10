@@ -288,7 +288,42 @@ export WFM_PASSWORD="your_password"
 cargo run --example create_orders
 cargo run --example session_persistence
 cargo run --example websocket --features websocket
+
+# Generate JWT token for testing (saves to .env)
+cargo run --example update_token
 ```
+
+## Development
+
+### Running Tests
+
+Unit tests run without credentials:
+
+```bash
+cargo test --all-features
+```
+
+### Integration Tests
+
+Integration tests require warframe.market credentials:
+
+```bash
+# 1. Set up credentials
+cp .env.example .env
+# Edit .env with your email and password
+
+# 2. Generate a JWT token (avoids rate limiting)
+cargo run --example update_token
+
+# 3. Run integration tests (serially - server allows one WS connection)
+cargo test --all-features -- --ignored --nocapture --test-threads=1
+```
+
+**Troubleshooting:**
+
+- **"Rate limited"**: Wait 10-15 minutes, then run `cargo run --example update_token`
+- **"JWT token expired"**: Run `cargo run --example update_token` to refresh
+- **"Unknown error" on WebSocket**: Use `--test-threads=1` to run tests serially
 
 ## Minimum Supported Rust Version
 
