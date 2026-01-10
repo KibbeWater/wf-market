@@ -26,6 +26,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Rate limiting**: Built-in rate limiter using `governor` crate
 - **Examples**: `basic_usage`, `create_orders`, `session_persistence`, `websocket`
 
+#### New Endpoints
+
+- **Orders**:
+  - `get_recent_orders()` - Get recent orders from the last 4 hours (max 500)
+  - `get_user_orders(slug)` - Get all public orders for a specific user
+  - `get_top_orders(slug, filters)` - Now accepts optional `TopOrderFilters` for filtering by rank, charges, stars, and subtype
+- **Items**:
+  - `get_item_set(slug)` - Get all items in a set (returns `ItemSet`)
+- **Users**:
+  - `get_user(slug)` - Get public user profile
+  - `me()` - Get current user's private profile (authenticated)
+  - `update_me(update)` - Update current user's profile settings (authenticated)
+- **Rivens**:
+  - `get_riven(slug)` - Get single riven weapon details
+  - `get_riven_attributes()` - Get all riven attribute definitions
+
+#### New Types
+
+- `TopOrderFilters` - Filter options for `get_top_orders()` with support for:
+  - `rank`, `rank_lt` - Mod rank filters
+  - `charges`, `charges_lt` - Consumable mod charges filters
+  - `amber_stars`, `amber_stars_lt`, `cyan_stars`, `cyan_stars_lt` - Ayatan sculpture filters
+  - `subtype` - Item subtype filter (e.g., "blueprint", "crafted")
+- `ItemSet` - Response for item set endpoint with `root()` and `parts()` helpers
+- `UserPrivate` - Private user profile with settings (from `/me` endpoint)
+- `UpdateProfile` - Builder for updating user profile settings
+- `RivenAttribute` and `RivenAttributeTranslation` - Riven attribute definitions
+- `Theme`, `UserRole`, `SubscriptionTier` - New enums for user profile data
+
+#### Enhanced Types
+
+- `UpdateOrder` - Added missing fields: `charges`, `amber_stars`, `cyan_stars`, `subtype`
+
 ### Changed
 
 - **Complete API redesign**: Simplified and more ergonomic API surface
@@ -35,6 +68,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Minimum Rust version**: Updated to 1.85 (2024 edition)
 - **Error handling**: Unified `Error` enum with `thiserror` derive
 - **Dependencies**: Updated to latest versions of all dependencies
+
+### Breaking Changes
+
+- **`get_top_orders`**: Now takes an optional `TopOrderFilters` parameter
+  ```rust
+  // Old
+  client.get_top_orders("item_slug").await?;
+  
+  // New (without filters)
+  client.get_top_orders("item_slug", None).await?;
+  
+  // New (with filters)
+  let filters = TopOrderFilters::new().rank(10);
+  client.get_top_orders("serration", Some(&filters)).await?;
+  ```
+- **`OrderFilters` renamed to `TopOrderFilters`**: The type was renamed and expanded with additional filter options
 
 ### Removed
 

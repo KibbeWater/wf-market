@@ -109,6 +109,101 @@ impl Riven {
     }
 }
 
+/// A riven attribute/stat that can appear on riven mods.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RivenAttribute {
+    /// Unique identifier
+    pub id: String,
+
+    /// URL-friendly identifier
+    pub slug: String,
+
+    /// Internal game reference
+    #[serde(rename = "gameRef")]
+    pub game_ref: String,
+
+    /// Attribute group for categorization
+    pub group: String,
+
+    /// Prefix used in riven names when positive
+    pub prefix: String,
+
+    /// Suffix used in riven names when negative
+    pub suffix: String,
+
+    /// Weapon types this attribute can appear on (if restricted)
+    #[serde(rename = "exclusiveTo", default)]
+    pub exclusive_to: Option<Vec<RivenType>>,
+
+    /// Whether a positive value is actually negative (e.g., recoil)
+    #[serde(rename = "positiveIsNegative", default)]
+    pub positive_is_negative: Option<bool>,
+
+    /// Whether this attribute can only be positive
+    #[serde(rename = "positiveOnly", default)]
+    pub positive_only: Option<bool>,
+
+    /// Whether this attribute can only be negative
+    #[serde(rename = "negativeOnly", default)]
+    pub negative_only: Option<bool>,
+
+    /// Unit of measurement (e.g., percent, flat)
+    #[serde(default)]
+    pub unit: Option<String>,
+
+    /// Localized content
+    #[serde(default)]
+    pub i18n: HashMap<String, RivenAttributeTranslation>,
+}
+
+/// Localized riven attribute content.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RivenAttributeTranslation {
+    /// Localized attribute name
+    pub name: String,
+
+    /// Path to attribute icon
+    pub icon: String,
+
+    /// Path to attribute thumbnail
+    #[serde(default)]
+    pub thumb: Option<String>,
+}
+
+impl RivenAttribute {
+    /// Get the English name of the attribute.
+    pub fn name(&self) -> &str {
+        self.i18n.get("en").map(|t| t.name.as_str()).unwrap_or("")
+    }
+
+    /// Get the localized name for a specific language.
+    pub fn name_localized(&self, lang: &str) -> &str {
+        self.i18n
+            .get(lang)
+            .or_else(|| self.i18n.get("en"))
+            .map(|t| t.name.as_str())
+            .unwrap_or("")
+    }
+
+    /// Check if this attribute is a "bad" positive (like increased recoil).
+    pub fn is_inverted(&self) -> bool {
+        self.positive_is_negative.unwrap_or(false)
+    }
+
+    /// Check if this attribute is restricted to specific weapon types.
+    pub fn is_restricted(&self) -> bool {
+        self.exclusive_to.as_ref().is_some_and(|v| !v.is_empty())
+    }
+
+    /// Check if this attribute can appear on a specific weapon type.
+    pub fn applies_to(&self, riven_type: RivenType) -> bool {
+        match &self.exclusive_to {
+            None => true,
+            Some(types) => types.is_empty() || types.contains(&riven_type),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

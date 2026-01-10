@@ -6,7 +6,7 @@ use crate::cache::ApiCache;
 use crate::client::{AuthState, Client};
 use crate::error::{ApiErrorResponse, Error, Result};
 use crate::internal::BASE_URL;
-use crate::models::Riven;
+use crate::models::{Riven, RivenAttribute};
 
 use super::ApiResponse;
 
@@ -147,5 +147,127 @@ impl<S: AuthState> Client<S> {
         } else {
             self.fetch_rivens().await
         }
+    }
+
+    /// Get a single riven weapon by slug.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use wf_market::Client;
+    ///
+    /// async fn example() -> wf_market::Result<()> {
+    ///     let client = Client::builder().build()?;
+    ///     let riven = client.get_riven("braton").await?;
+    ///
+    ///     println!("{}: disposition {} (tier {})",
+    ///         riven.name(),
+    ///         riven.disposition,
+    ///         riven.disposition_tier()
+    ///     );
+    ///     Ok(())
+    /// }
+    /// ```
+    pub async fn get_riven(&self, slug: &str) -> Result<Riven> {
+        self.wait_for_rate_limit().await;
+
+        let response = self
+            .http
+            .get(format!("{}/riven/weapon/{}", BASE_URL, slug))
+            .send()
+            .await
+            .map_err(Error::Network)?;
+
+        let status = response.status();
+
+        if status == reqwest::StatusCode::NOT_FOUND {
+            return Err(Error::not_found(format!(
+                "Riven weapon not found: {}",
+                slug
+            )));
+        }
+
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+
+            if let Ok(error_response) = serde_json::from_str::<ApiErrorResponse>(&body) {
+                return Err(Error::api_with_response(
+                    status,
+                    format!("Failed to fetch riven weapon: {}", slug),
+                    error_response,
+                ));
+            }
+
+            return Err(Error::api(
+                status,
+                format!("Failed to fetch riven weapon {}: {}", slug, body),
+            ));
+        }
+
+        let body = response.text().await.map_err(Error::Network)?;
+
+        let api_response: ApiResponse<Riven> =
+            serde_json::from_str(&body).map_err(|e| Error::parse_with_body(e.to_string(), body))?;
+
+        Ok(api_response.data)
+    }
+
+    /// Get all riven attributes/stats.
+    ///
+    /// Returns all possible attributes that can appear on riven mods.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use wf_market::Client;
+    ///
+    /// async fn example() -> wf_market::Result<()> {
+    ///     let client = Client::builder().build()?;
+    ///     let attributes = client.get_riven_attributes().await?;
+    ///
+    ///     for attr in &attributes {
+    ///         println!("{}: {} / -{}", attr.name(), attr.prefix, attr.suffix);
+    ///         if attr.is_inverted() {
+    ///             println!("  (inverted - positive is bad)");
+    ///         }
+    ///     }
+    ///     Ok(())
+    /// }
+    /// ```
+    pub async fn get_riven_attributes(&self) -> Result<Vec<RivenAttribute>> {
+        self.wait_for_rate_limit().await;
+
+        let response = self
+            .http
+            .get(format!("{}/riven/attributes", BASE_URL))
+            .send()
+            .await
+            .map_err(Error::Network)?;
+
+        let status = response.status();
+
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+
+            if let Ok(error_response) = serde_json::from_str::<ApiErrorResponse>(&body) {
+                return Err(Error::api_with_response(
+                    status,
+                    "Failed to fetch riven attributes",
+                    error_response,
+                ));
+            }
+
+            return Err(Error::api(
+                status,
+                format!("Failed to fetch riven attributes: {}", body),
+            ));
+        }
+
+        let body = response.text().await.map_err(Error::Network)?;
+
+        let api_response: ApiResponse<Vec<RivenAttribute>> =
+            serde_json::from_str(&body).map_err(|e| Error::parse_with_body(e.to_string(), body))?;
+
+        Ok(api_response.data)
     }
 }

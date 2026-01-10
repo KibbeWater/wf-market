@@ -6,7 +6,8 @@ use crate::client::{AuthState, Authenticated, Client};
 use crate::error::{ApiErrorResponse, Error, Result};
 use crate::internal::BASE_URL;
 use crate::models::{
-    CreateOrder, Order, OrderListing, OwnedOrder, OwnedOrderId, TopOrders, Transaction, UpdateOrder,
+    CreateOrder, Order, OrderListing, OwnedOrder, OwnedOrderId, TopOrderFilters, TopOrders,
+    Transaction, UpdateOrder,
 };
 
 use super::ApiResponse;
@@ -110,16 +111,31 @@ impl<S: AuthState> Client<S> {
     /// Get top orders for an item (best buy and sell prices).
     ///
     /// Returns the top 5 buy orders (highest prices) and top 5 sell
-    /// orders (lowest prices).
+    /// orders (lowest prices). Only includes orders from online users.
+    ///
+    /// # Arguments
+    ///
+    /// * `slug` - The item's URL-friendly identifier
+    /// * `filters` - Optional filters for mod rank, charges, stars, or subtype
     ///
     /// # Example
     ///
     /// ```ignore
-    /// use wf_market::Client;
+    /// use wf_market::{Client, TopOrderFilters};
     ///
     /// async fn example() -> wf_market::Result<()> {
     ///     let client = Client::builder().build()?;
-    ///     let top = client.get_top_orders("nikana_prime_set").await?;
+    ///
+    ///     // Get top orders without filters
+    ///     let top = client.get_top_orders("nikana_prime_set", None).await?;
+    ///
+    ///     // Get top orders for max rank mods
+    ///     let filters = TopOrderFilters::new().rank(10);
+    ///     let top = client.get_top_orders("serration", Some(&filters)).await?;
+    ///
+    ///     // Get top orders for sculptures with specific stars
+    ///     let filters = TopOrderFilters::new().amber_stars(2).cyan_stars(4);
+    ///     let top = client.get_top_orders("ayatan_anasa_sculpture", Some(&filters)).await?;
     ///
     ///     if let (Some(sell), Some(buy)) = (top.best_sell_price(), top.best_buy_price()) {
     ///         println!("Best sell: {}p, Best buy: {}p", sell, buy);
@@ -130,15 +146,17 @@ impl<S: AuthState> Client<S> {
     ///     Ok(())
     /// }
     /// ```
-    pub async fn get_top_orders(&self, slug: &str) -> Result<TopOrders> {
+    pub async fn get_top_orders(
+        &self,
+        slug: &str,
+        filters: Option<&TopOrderFilters>,
+    ) -> Result<TopOrders> {
         self.wait_for_rate_limit().await;
 
-        let response = self
-            .http
-            .get(format!("{}/orders/item/{}/top", BASE_URL, slug))
-            .send()
-            .await
-            .map_err(Error::Network)?;
+        let query = filters.map_or(String::new(), |f| f.to_query_string());
+        let url = format!("{}/orders/item/{}/top{}", BASE_URL, slug, query);
+
+        let response = self.http.get(&url).send().await.map_err(Error::Network)?;
 
         let status = response.status();
 
@@ -157,6 +175,134 @@ impl<S: AuthState> Client<S> {
         let body = response.text().await.map_err(Error::Network)?;
 
         let api_response: ApiResponse<TopOrders> =
+            serde_json::from_str(&body).map_err(|e| Error::parse_with_body(e.to_string(), body))?;
+
+        Ok(api_response.data)
+    }
+
+    /// Get recent orders from the last 4 hours.
+    ///
+    /// Returns up to 500 of the most recent orders, sorted by creation time.
+    /// Results are cached server-side with a 1-minute refresh interval.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use wf_market::Client;
+    ///
+    /// async fn example() -> wf_market::Result<()> {
+    ///     let client = Client::builder().build()?;
+    ///     let recent = client.get_recent_orders().await?;
+    ///
+    ///     for order in &recent {
+    ///         println!(
+    ///             "{} wants to {} {} for {}p",
+    ///             order.user.ingame_name,
+    ///             order.order_type,
+    ///             order.order.item_id,
+    ///             order.order.platinum
+    ///         );
+    ///     }
+    ///     Ok(())
+    /// }
+    /// ```
+    pub async fn get_recent_orders(&self) -> Result<Vec<OrderListing>> {
+        self.wait_for_rate_limit().await;
+
+        let response = self
+            .http
+            .get(format!("{}/orders/recent", BASE_URL))
+            .send()
+            .await
+            .map_err(Error::Network)?;
+
+        let status = response.status();
+
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+
+            if let Ok(error_response) = serde_json::from_str::<ApiErrorResponse>(&body) {
+                return Err(Error::api_with_response(
+                    status,
+                    "Failed to fetch recent orders",
+                    error_response,
+                ));
+            }
+
+            return Err(Error::api(
+                status,
+                format!("Failed to fetch recent orders: {}", body),
+            ));
+        }
+
+        let body = response.text().await.map_err(Error::Network)?;
+
+        let api_response: ApiResponse<Vec<OrderListing>> =
+            serde_json::from_str(&body).map_err(|e| Error::parse_with_body(e.to_string(), body))?;
+
+        Ok(api_response.data)
+    }
+
+    /// Get all public orders for a specific user.
+    ///
+    /// Returns orders without user information (since the user is known).
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use wf_market::Client;
+    ///
+    /// async fn example() -> wf_market::Result<()> {
+    ///     let client = Client::builder().build()?;
+    ///     let orders = client.get_user_orders("some_user").await?;
+    ///
+    ///     for order in &orders {
+    ///         println!(
+    ///             "{}: {} @ {}p",
+    ///             order.order_type,
+    ///             order.item_id,
+    ///             order.platinum
+    ///         );
+    ///     }
+    ///     Ok(())
+    /// }
+    /// ```
+    pub async fn get_user_orders(&self, user_slug: &str) -> Result<Vec<Order>> {
+        self.wait_for_rate_limit().await;
+
+        let response = self
+            .http
+            .get(format!("{}/orders/user/{}", BASE_URL, user_slug))
+            .send()
+            .await
+            .map_err(Error::Network)?;
+
+        let status = response.status();
+
+        if status == reqwest::StatusCode::NOT_FOUND {
+            return Err(Error::not_found(format!("User not found: {}", user_slug)));
+        }
+
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+
+            if let Ok(error_response) = serde_json::from_str::<ApiErrorResponse>(&body) {
+                return Err(Error::api_with_response(
+                    status,
+                    format!("Failed to fetch orders for user: {}", user_slug),
+                    error_response,
+                ));
+            }
+
+            return Err(Error::api(
+                status,
+                format!("Failed to fetch user orders: {}", body),
+            ));
+        }
+
+        let body = response.text().await.map_err(Error::Network)?;
+
+        let api_response: ApiResponse<Vec<Order>> =
             serde_json::from_str(&body).map_err(|e| Error::parse_with_body(e.to_string(), body))?;
 
         Ok(api_response.data)

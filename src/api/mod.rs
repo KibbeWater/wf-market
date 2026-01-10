@@ -5,6 +5,7 @@
 mod items;
 mod orders;
 mod rivens;
+mod users;
 
 // Response wrapper types used by multiple endpoints
 use serde::Deserialize;

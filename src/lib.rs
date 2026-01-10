@@ -177,7 +177,7 @@ pub use models::{
     // Users
     Achievement,
     AchievementType,
-    // Common
+    // Common types
     Activity,
     ActivityType,
     // Orders
@@ -187,11 +187,11 @@ pub use models::{
     FullUser,
     // Items
     Item,
+    ItemSet,
     ItemTranslation,
     Language,
     ModView,
     Order,
-    OrderFilters,
     OrderListing,
     OrderType,
     OwnedOrder,
@@ -200,15 +200,23 @@ pub use models::{
     Rarity,
     // Rivens
     Riven,
+    RivenAttribute,
+    RivenAttributeTranslation,
     RivenTranslation,
     RivenType,
     SculptureView,
+    SubscriptionTier,
+    Theme,
+    TopOrderFilters,
     TopOrders,
     // Transactions
     Transaction,
     UpdateOrder,
+    UpdateProfile,
     User,
+    UserPrivate,
     UserProfile,
+    UserRole,
     UserStatus,
     WithPassword,
 };
