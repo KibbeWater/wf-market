@@ -216,6 +216,7 @@ impl Error {
     }
 
     /// Create a parse error.
+    #[allow(dead_code)]
     pub(crate) fn parse(message: impl Into<String>) -> Self {
         Error::Parse {
             message: message.into(),

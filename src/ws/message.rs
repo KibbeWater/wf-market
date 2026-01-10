@@ -128,6 +128,7 @@ impl ParsedRoute {
     }
 
     /// Get the full action path (without parameter).
+    #[allow(dead_code)]
     pub fn full_action(&self) -> String {
         format!("{}/{}", self.module, self.action)
     }

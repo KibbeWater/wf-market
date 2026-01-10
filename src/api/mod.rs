@@ -13,6 +13,7 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize)]
 pub(crate) struct ApiResponse<T> {
     #[serde(rename = "apiVersion")]
+    #[allow(dead_code)]
     pub api_version: Option<String>,
     pub data: T,
 }

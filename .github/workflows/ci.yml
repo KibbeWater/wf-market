@@ -11,72 +11,39 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
-  check:
-    name: Check
+  ci:
+    name: Build & Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo check --all-features
-
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo test --all-features
-
-  fmt:
-    name: Format
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt
-      - run: cargo fmt --all -- --check
-
-  clippy:
-    name: Clippy
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy --all-features -- -D warnings
-
-  docs:
-    name: Docs
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo doc --all-features --no-deps
+          components: rustfmt, clippy
+      
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+      
+      - name: Format
+        run: cargo fmt --all -- --check
+      
+      - name: Clippy
+        run: cargo clippy --all-features -- -D warnings
+      
+      - name: Build
+        run: cargo build --all-features
+      
+      - name: Test
+        run: cargo test --all-features
+      
+      - name: Test (minimal features)
+        run: cargo test --no-default-features
+      
+      - name: Test (native-tls)
+        run: cargo test --no-default-features --features native-tls,websocket
+      
+      - name: Docs
+        run: cargo doc --all-features --no-deps
         env:
           RUSTDOCFLAGS: -D warnings
-
-  # Test with minimal features
-  test-minimal:
-    name: Test (minimal features)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo test
-
-  # Test with native-tls instead of rustls
-  test-native-tls:
-    name: Test (native-tls)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo test --no-default-features --features native-tls,websocket
