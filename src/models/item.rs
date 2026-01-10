@@ -528,3 +528,60 @@ mod tests {
         assert!(item.as_sculpture().is_none());
     }
 }
+
+/// Response for item set endpoint.
+///
+/// Contains the requested item's ID and all items in the set.
+/// If the item is not part of a set, the items array contains only that item.
+///
+/// # Example
+///
+/// ```ignore
+/// use wf_market::Client;
+///
+/// async fn example() -> wf_market::Result<()> {
+///     let client = Client::builder().build()?;
+///     let set = client.get_item_set("nikana_prime_set").await?;
+///
+///     println!("Set {} contains {} items:", set.id, set.items.len());
+///     for item in &set.items {
+///         println!("  - {}", item.name());
+///     }
+///     Ok(())
+/// }
+/// ```
+#[derive(Debug, Clone, Deserialize)]
+pub struct ItemSet {
+    /// ID of the requested item
+    pub id: String,
+
+    /// All items in the set (or just the single item if not part of a set)
+    pub items: Vec<Item>,
+}
+
+impl ItemSet {
+    /// Check if this is actually a set (more than one item).
+    pub fn is_set(&self) -> bool {
+        self.items.len() > 1
+    }
+
+    /// Get the number of items in the set.
+    pub fn len(&self) -> usize {
+        self.items.len()
+    }
+
+    /// Check if the set is empty (should never happen with valid API data).
+    pub fn is_empty(&self) -> bool {
+        self.items.is_empty()
+    }
+
+    /// Get the set root item (the main set item like "Nikana Prime Set").
+    pub fn root(&self) -> Option<&Item> {
+        self.items.iter().find(|item| item.is_set())
+    }
+
+    /// Get all parts excluding the set root.
+    pub fn parts(&self) -> impl Iterator<Item = &Item> {
+        self.items.iter().filter(|item| !item.is_set())
+    }
+}

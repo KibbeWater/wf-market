@@ -50,7 +50,7 @@ async fn main() -> wf_market::Result<()> {
 
         // Get statistics
         println!("\n=== Top Orders (Statistics) ===");
-        let top = client.get_top_orders(&item.slug).await?;
+        let top = client.get_top_orders(&item.slug, None).await?;
         println!("Lowest sell: {:?}p", top.sell.first().map(|o| o.platinum));
         println!("Highest buy: {:?}p", top.buy.first().map(|o| o.platinum));
     }

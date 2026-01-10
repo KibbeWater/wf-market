@@ -321,6 +321,81 @@ impl Activity {
     }
 }
 
+/// UI theme preference.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Theme {
+    /// Light theme
+    Light,
+    /// Dark theme
+    Dark,
+    /// Follow system preference
+    #[default]
+    System,
+}
+
+impl std::fmt::Display for Theme {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Theme::Light => write!(f, "Light"),
+            Theme::Dark => write!(f, "Dark"),
+            Theme::System => write!(f, "System"),
+        }
+    }
+}
+
+/// User role on the site.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum UserRole {
+    /// Regular user
+    #[default]
+    User,
+    /// Moderator
+    Moderator,
+    /// Administrator
+    Admin,
+}
+
+impl std::fmt::Display for UserRole {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UserRole::User => write!(f, "User"),
+            UserRole::Moderator => write!(f, "Moderator"),
+            UserRole::Admin => write!(f, "Admin"),
+        }
+    }
+}
+
+/// Subscription tier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SubscriptionTier {
+    /// No subscription
+    #[default]
+    None,
+    /// Bronze tier
+    Bronze,
+    /// Silver tier
+    Silver,
+    /// Gold tier
+    Gold,
+    /// Diamond tier
+    Diamond,
+}
+
+impl std::fmt::Display for SubscriptionTier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SubscriptionTier::None => write!(f, "None"),
+            SubscriptionTier::Bronze => write!(f, "Bronze"),
+            SubscriptionTier::Silver => write!(f, "Silver"),
+            SubscriptionTier::Gold => write!(f, "Gold"),
+            SubscriptionTier::Diamond => write!(f, "Diamond"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

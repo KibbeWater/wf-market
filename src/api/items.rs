@@ -6,7 +6,7 @@ use crate::cache::ApiCache;
 use crate::client::{AuthState, Client};
 use crate::error::{ApiErrorResponse, Error, Result};
 use crate::internal::BASE_URL;
-use crate::models::Item;
+use crate::models::{Item, ItemSet};
 
 use super::ApiResponse;
 
@@ -202,6 +202,73 @@ impl<S: AuthState> Client<S> {
         let body = response.text().await.map_err(Error::Network)?;
 
         let api_response: ApiResponse<Item> =
+            serde_json::from_str(&body).map_err(|e| Error::parse_with_body(e.to_string(), body))?;
+
+        Ok(api_response.data)
+    }
+
+    /// Get all items in a set.
+    ///
+    /// Returns the complete set containing all parts for items that belong to a set.
+    /// If the item is not part of a set, returns an array containing only that item.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use wf_market::Client;
+    ///
+    /// async fn example() -> wf_market::Result<()> {
+    ///     let client = Client::builder().build()?;
+    ///     let set = client.get_item_set("nikana_prime_set").await?;
+    ///
+    ///     println!("Set contains {} items:", set.len());
+    ///     for item in &set.items {
+    ///         println!("  - {} ({})", item.name(), item.slug);
+    ///     }
+    ///
+    ///     // Get just the parts (excluding the set itself)
+    ///     for part in set.parts() {
+    ///         println!("Part: {}", part.name());
+    ///     }
+    ///     Ok(())
+    /// }
+    /// ```
+    pub async fn get_item_set(&self, slug: &str) -> Result<ItemSet> {
+        self.wait_for_rate_limit().await;
+
+        let response = self
+            .http
+            .get(format!("{}/item/{}/set", BASE_URL, slug))
+            .send()
+            .await
+            .map_err(Error::Network)?;
+
+        let status = response.status();
+
+        if status == reqwest::StatusCode::NOT_FOUND {
+            return Err(Error::not_found(format!("Item not found: {}", slug)));
+        }
+
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+
+            if let Ok(error_response) = serde_json::from_str::<ApiErrorResponse>(&body) {
+                return Err(Error::api_with_response(
+                    status,
+                    format!("Failed to fetch item set: {}", slug),
+                    error_response,
+                ));
+            }
+
+            return Err(Error::api(
+                status,
+                format!("Failed to fetch item set {}: {}", slug, body),
+            ));
+        }
+
+        let body = response.text().await.map_err(Error::Network)?;
+
+        let api_response: ApiResponse<ItemSet> =
             serde_json::from_str(&body).map_err(|e| Error::parse_with_body(e.to_string(), body))?;
 
         Ok(api_response.data)

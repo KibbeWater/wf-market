@@ -14,12 +14,15 @@ pub mod user;
 
 // Re-export commonly used types
 pub use common::{
-    Activity, ActivityType, Language, OrderType, Platform, Rarity, RivenType, UserStatus,
+    Activity, ActivityType, Language, OrderType, Platform, Rarity, RivenType, SubscriptionTier,
+    Theme, UserRole, UserStatus,
 };
 pub use credentials::{Credentials, WithPassword};
-pub use item::{Item, ItemTranslation, ModView, SculptureView};
+pub use item::{Item, ItemSet, ItemTranslation, ModView, SculptureView};
 pub use order::{Order, OrderListing, OwnedOrder, OwnedOrderId, TopOrders};
-pub use request::{CreateOrder, OrderFilters, UpdateOrder};
-pub use riven::{Riven, RivenTranslation};
+pub use request::{CreateOrder, TopOrderFilters, UpdateOrder};
+pub use riven::{Riven, RivenAttribute, RivenAttributeTranslation, RivenTranslation};
 pub use transaction::Transaction;
-pub use user::{Achievement, AchievementType, FullUser, User, UserProfile};
+pub use user::{
+    Achievement, AchievementType, FullUser, UpdateProfile, User, UserPrivate, UserProfile,
+};

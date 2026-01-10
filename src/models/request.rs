@@ -197,6 +197,11 @@ impl CreateOrder {
 ///
 /// // Hide the order
 /// let update = UpdateOrder::new().visible(false);
+///
+/// // Update sculpture stars
+/// let update = UpdateOrder::new()
+///     .amber_stars(2)
+///     .cyan_stars(4);
 /// ```
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -220,6 +225,22 @@ pub struct UpdateOrder {
     /// New mod rank
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rank: Option<u8>,
+
+    /// New charges count (for consumable mods)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub charges: Option<u8>,
+
+    /// New amber stars count (for sculptures)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub amber_stars: Option<u8>,
+
+    /// New cyan stars count (for sculptures)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cyan_stars: Option<u8>,
+
+    /// New subtype
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subtype: Option<String>,
 }
 
 impl UpdateOrder {
@@ -268,6 +289,30 @@ impl UpdateOrder {
         self
     }
 
+    /// Set the new charges count (for consumable mods).
+    pub fn charges(mut self, charges: u8) -> Self {
+        self.charges = Some(charges);
+        self
+    }
+
+    /// Set the new amber stars count (for Ayatan sculptures).
+    pub fn amber_stars(mut self, stars: u8) -> Self {
+        self.amber_stars = Some(stars);
+        self
+    }
+
+    /// Set the new cyan stars count (for Ayatan sculptures).
+    pub fn cyan_stars(mut self, stars: u8) -> Self {
+        self.cyan_stars = Some(stars);
+        self
+    }
+
+    /// Set the new subtype.
+    pub fn subtype(mut self, subtype: impl Into<String>) -> Self {
+        self.subtype = Some(subtype.into());
+        self
+    }
+
     /// Check if any fields are set.
     pub fn is_empty(&self) -> bool {
         self.platinum.is_none()
@@ -275,48 +320,186 @@ impl UpdateOrder {
             && self.visible.is_none()
             && self.per_trade.is_none()
             && self.rank.is_none()
+            && self.charges.is_none()
+            && self.amber_stars.is_none()
+            && self.cyan_stars.is_none()
+            && self.subtype.is_none()
     }
 }
 
 /// Filter options for fetching top orders.
+///
+/// Use the builder methods to construct filters for the `get_top_orders` endpoint.
+///
+/// # Example
+///
+/// ```
+/// use wf_market::TopOrderFilters;
+///
+/// // Filter for max rank mods
+/// let filters = TopOrderFilters::new().rank(10);
+///
+/// // Filter for mods with rank less than 5
+/// let filters = TopOrderFilters::new().rank_lt(5);
+///
+/// // Filter for sculptures with specific star counts
+/// let filters = TopOrderFilters::new()
+///     .amber_stars(2)
+///     .cyan_stars(4);
+///
+/// // Filter by subtype
+/// let filters = TopOrderFilters::new().subtype("blueprint");
+/// ```
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct OrderFilters {
-    /// Filter by mod rank
+pub struct TopOrderFilters {
+    /// Filter by exact mod rank
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rank: Option<u8>,
 
-    /// Filter by item subtype
+    /// Filter by mod rank less than this value
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rank_lt: Option<u8>,
+
+    /// Filter by exact charges (for consumable mods)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub charges: Option<u8>,
+
+    /// Filter by charges less than this value
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub charges_lt: Option<u8>,
+
+    /// Filter by exact amber stars (for sculptures)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub amber_stars: Option<u8>,
+
+    /// Filter by amber stars less than this value
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub amber_stars_lt: Option<u8>,
+
+    /// Filter by exact cyan stars (for sculptures)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cyan_stars: Option<u8>,
+
+    /// Filter by cyan stars less than this value
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cyan_stars_lt: Option<u8>,
+
+    /// Filter by item subtype (e.g., "blueprint", "crafted")
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subtype: Option<String>,
-
-    /// Filter by user status
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub user_status: Option<String>,
 }
 
-impl OrderFilters {
+impl TopOrderFilters {
     /// Create new empty filters.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Filter by mod rank.
+    /// Filter by exact mod rank.
     pub fn rank(mut self, rank: u8) -> Self {
         self.rank = Some(rank);
         self
     }
 
-    /// Filter by item subtype.
+    /// Filter by mod rank less than this value.
+    pub fn rank_lt(mut self, rank: u8) -> Self {
+        self.rank_lt = Some(rank);
+        self
+    }
+
+    /// Filter by exact charges (for consumable mods like Requiem).
+    pub fn charges(mut self, charges: u8) -> Self {
+        self.charges = Some(charges);
+        self
+    }
+
+    /// Filter by charges less than this value.
+    pub fn charges_lt(mut self, charges: u8) -> Self {
+        self.charges_lt = Some(charges);
+        self
+    }
+
+    /// Filter by exact amber stars (for Ayatan sculptures).
+    pub fn amber_stars(mut self, stars: u8) -> Self {
+        self.amber_stars = Some(stars);
+        self
+    }
+
+    /// Filter by amber stars less than this value.
+    pub fn amber_stars_lt(mut self, stars: u8) -> Self {
+        self.amber_stars_lt = Some(stars);
+        self
+    }
+
+    /// Filter by exact cyan stars (for Ayatan sculptures).
+    pub fn cyan_stars(mut self, stars: u8) -> Self {
+        self.cyan_stars = Some(stars);
+        self
+    }
+
+    /// Filter by cyan stars less than this value.
+    pub fn cyan_stars_lt(mut self, stars: u8) -> Self {
+        self.cyan_stars_lt = Some(stars);
+        self
+    }
+
+    /// Filter by item subtype (e.g., "blueprint", "crafted").
     pub fn subtype(mut self, subtype: impl Into<String>) -> Self {
         self.subtype = Some(subtype.into());
         self
     }
 
-    /// Filter by user status (online, ingame).
-    pub fn user_status(mut self, status: impl Into<String>) -> Self {
-        self.user_status = Some(status.into());
-        self
+    /// Check if any filters are set.
+    pub fn is_empty(&self) -> bool {
+        self.rank.is_none()
+            && self.rank_lt.is_none()
+            && self.charges.is_none()
+            && self.charges_lt.is_none()
+            && self.amber_stars.is_none()
+            && self.amber_stars_lt.is_none()
+            && self.cyan_stars.is_none()
+            && self.cyan_stars_lt.is_none()
+            && self.subtype.is_none()
+    }
+
+    /// Build query string for the filters.
+    pub(crate) fn to_query_string(&self) -> String {
+        let mut params = Vec::new();
+
+        if let Some(v) = self.rank {
+            params.push(format!("rank={}", v));
+        }
+        if let Some(v) = self.rank_lt {
+            params.push(format!("rankLt={}", v));
+        }
+        if let Some(v) = self.charges {
+            params.push(format!("charges={}", v));
+        }
+        if let Some(v) = self.charges_lt {
+            params.push(format!("chargesLt={}", v));
+        }
+        if let Some(v) = self.amber_stars {
+            params.push(format!("amberStars={}", v));
+        }
+        if let Some(v) = self.amber_stars_lt {
+            params.push(format!("amberStarsLt={}", v));
+        }
+        if let Some(v) = self.cyan_stars {
+            params.push(format!("cyanStars={}", v));
+        }
+        if let Some(v) = self.cyan_stars_lt {
+            params.push(format!("cyanStarsLt={}", v));
+        }
+        if let Some(ref v) = self.subtype {
+            params.push(format!("subtype={}", v));
+        }
+
+        if params.is_empty() {
+            String::new()
+        } else {
+            format!("?{}", params.join("&"))
+        }
     }
 }
 
