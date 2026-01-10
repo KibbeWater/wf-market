@@ -210,4 +210,5 @@ pub use models::{
     User,
     UserProfile,
     UserStatus,
+    WithPassword,
 };
