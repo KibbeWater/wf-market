@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **V1 API Statistics Endpoint**: `get_item_statistics()` for historical price/volume data
+  - Requires `v1-api` feature flag: `wf-market = { features = ["v1-api"] }`
+  - Returns 48-hour (hourly) and 90-day (daily) statistics
+  - Includes closed trade data and live order data
+  - Helper methods: `recent_avg_price()`, `has_sufficient_data()`, etc.
+- **New types**: `ItemStatistics`, `TimeframedStatistics`, `StatisticEntry`
+
 ## [0.3.0] - 2026-01-11
 
 ### Added

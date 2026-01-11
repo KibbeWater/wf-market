@@ -18,6 +18,7 @@ default = ["rustls-tls"]
 rustls-tls = ["reqwest/rustls-tls", "tokio-tungstenite?/rustls-tls-native-roots"]
 native-tls = ["reqwest/native-tls", "tokio-tungstenite?/native-tls"]
 websocket = ["dep:tokio-tungstenite", "dep:futures-util"]
+v1-api = []  # Enable deprecated V1 API endpoints (statistics)
 
 [dependencies]
 # Async runtime
