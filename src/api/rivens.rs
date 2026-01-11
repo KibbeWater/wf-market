@@ -28,7 +28,7 @@ impl<S: AuthState> Client<S> {
     /// use wf_market::Client;
     ///
     /// async fn example() -> wf_market::Result<()> {
-    ///     let client = Client::builder().build()?;
+    ///     let client = Client::builder().build().await?;
     ///     let rivens = client.fetch_rivens().await?;
     ///     println!("Found {} riven weapons", rivens.len());
     ///     Ok(())
@@ -85,7 +85,7 @@ impl<S: AuthState> Client<S> {
     /// use wf_market::{Client, ApiCache};
     ///
     /// async fn example() -> wf_market::Result<()> {
-    ///     let client = Client::builder().build()?;
+    ///     let client = Client::builder().build().await?;
     ///     let mut cache = ApiCache::new();
     ///
     ///     // First call fetches from API
@@ -124,7 +124,7 @@ impl<S: AuthState> Client<S> {
     /// use std::time::Duration;
     ///
     /// async fn example() -> wf_market::Result<()> {
-    ///     let client = Client::builder().build()?;
+    ///     let client = Client::builder().build().await?;
     ///     let mut cache = ApiCache::new();
     ///
     ///     // Refresh if cache is older than 24 hours
@@ -157,7 +157,7 @@ impl<S: AuthState> Client<S> {
     /// use wf_market::Client;
     ///
     /// async fn example() -> wf_market::Result<()> {
-    ///     let client = Client::builder().build()?;
+    ///     let client = Client::builder().build().await?;
     ///     let riven = client.get_riven("braton").await?;
     ///
     ///     println!("{}: disposition {} (tier {})",
@@ -222,7 +222,7 @@ impl<S: AuthState> Client<S> {
     /// use wf_market::Client;
     ///
     /// async fn example() -> wf_market::Result<()> {
-    ///     let client = Client::builder().build()?;
+    ///     let client = Client::builder().build().await?;
     ///     let attributes = client.get_riven_attributes().await?;
     ///
     ///     for attr in &attributes {

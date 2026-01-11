@@ -25,7 +25,7 @@ impl<S: AuthState> Client<S> {
     /// use wf_market::Client;
     ///
     /// async fn example() -> wf_market::Result<()> {
-    ///     let client = Client::builder().build()?;
+    ///     let client = Client::builder().build().await?;
     ///     let orders = client.get_orders("nikana_prime_set").await?;
     ///
     ///     for order in &orders {
@@ -99,7 +99,7 @@ impl<S: AuthState> Client<S> {
     /// use wf_market::Client;
     ///
     /// async fn example() -> wf_market::Result<()> {
-    ///     let client = Client::builder().build()?;
+    ///     let client = Client::builder().build().await?;
     ///     let orders = client.get_listings("nikana_prime_set").await?;
     ///
     ///     let avg_price: f64 = orders.iter()
@@ -132,7 +132,7 @@ impl<S: AuthState> Client<S> {
     /// use wf_market::{Client, TopOrderFilters};
     ///
     /// async fn example() -> wf_market::Result<()> {
-    ///     let client = Client::builder().build()?;
+    ///     let client = Client::builder().build().await?;
     ///
     ///     // Get top orders without filters
     ///     let top = client.get_top_orders("nikana_prime_set", None).await?;
@@ -203,7 +203,7 @@ impl<S: AuthState> Client<S> {
     /// use wf_market::Client;
     ///
     /// async fn example() -> wf_market::Result<()> {
-    ///     let client = Client::builder().build()?;
+    ///     let client = Client::builder().build().await?;
     ///     let recent = client.get_recent_orders().await?;
     ///
     ///     for order in &recent {
@@ -272,7 +272,7 @@ impl<S: AuthState> Client<S> {
     /// use wf_market::Client;
     ///
     /// async fn example() -> wf_market::Result<()> {
-    ///     let client = Client::builder().build()?;
+    ///     let client = Client::builder().build().await?;
     ///     let orders = client.get_user_orders("some_user").await?;
     ///
     ///     for order in &orders {
@@ -342,7 +342,7 @@ impl<S: AuthState> Client<S> {
     /// use wf_market::Client;
     ///
     /// async fn example() -> wf_market::Result<()> {
-    ///     let client = Client::builder().build()?;
+    ///     let client = Client::builder().build().await?;
     ///     let order = client.get_order("order-id-here").await?;
     ///     println!("Order: {} @ {}p", order.item_id, order.platinum);
     ///     Ok(())

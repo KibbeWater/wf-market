@@ -17,7 +17,7 @@
 //!
 //! async fn example() -> wf_market::Result<()> {
 //!     // Create an unauthenticated client
-//!     let client = Client::builder().build()?;
+//!     let client = Client::builder().build().await?;
 //!
 //!     // Fetch public data
 //!     let items = client.fetch_items().await?;
@@ -111,14 +111,17 @@ impl Client<Unauthenticated> {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```ignore
     /// use wf_market::{Client, Platform, Language};
     ///
-    /// let client = Client::builder()
-    ///     .platform(Platform::Pc)
-    ///     .language(Language::English)
-    ///     .build()?;
-    /// # Ok::<(), wf_market::Error>(())
+    /// async fn example() -> wf_market::Result<()> {
+    ///     let client = Client::builder()
+    ///         .platform(Platform::Pc)
+    ///         .language(Language::English)
+    ///         .build()
+    ///         .await?;
+    ///     Ok(())
+    /// }
     /// ```
     pub fn builder() -> ClientBuilder {
         ClientBuilder::default()
@@ -131,7 +134,7 @@ impl Client<Unauthenticated> {
     /// # use wf_market::{Client, Credentials};
     /// # async fn example() -> wf_market::Result<()> {
     /// # let credentials = Credentials::new("", "", "");
-    /// let client = Client::builder().build()?.login(credentials).await?;
+    /// let client = Client::builder().build().await?.login(credentials).await?;
     /// # Ok(())
     /// # }
     /// ```

@@ -10,7 +10,7 @@
 //! use wf_market::Client;
 //!
 //! async fn example() -> wf_market::Result<()> {
-//!     let client = Client::builder().build()?;
+//!     let client = Client::builder().build().await?;
 //!     let items = client.fetch_items().await?;
 //!
 //!     for item in &items {
@@ -941,7 +941,7 @@ mod tests {
 /// use wf_market::Client;
 ///
 /// async fn example() -> wf_market::Result<()> {
-///     let client = Client::builder().build()?;
+///     let client = Client::builder().build().await?;
 ///     let set = client.get_item_set("nikana_prime_set").await?;
 ///
 ///     println!("Set {} contains {} items:", set.id, set.items.len());

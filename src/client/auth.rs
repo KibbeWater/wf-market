@@ -43,7 +43,7 @@ impl Client<Unauthenticated> {
     /// use wf_market::{Client, Credentials};
     ///
     /// async fn example() -> wf_market::Result<()> {
-    ///     let client = Client::builder().build()?;
+    ///     let client = Client::builder().build().await?;
     ///     
     ///     let creds = Credentials::new(
     ///         "user@example.com",
@@ -75,7 +75,7 @@ impl Client<Unauthenticated> {
     ///         "saved-jwt-token",
     ///     );
     ///     
-    ///     let client = Client::builder().build()?.login(creds).await?;
+    ///     let client = Client::builder().build().await?.login(creds).await?;
     ///     Ok(())
     /// }
     /// ```

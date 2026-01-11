@@ -20,7 +20,7 @@ impl<S: AuthState> Client<S> {
     /// use wf_market::Client;
     ///
     /// async fn example() -> wf_market::Result<()> {
-    ///     let client = Client::builder().build()?;
+    ///     let client = Client::builder().build().await?;
     ///     let user = client.get_user("some_user").await?;
     ///
     ///     println!("User: {} ({})", user.ingame_name, user.platform);
