@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-01-11
+
+### Fixed
+
+- **Statistics Deserialization**: Handle API responses where numeric values are returned as floats (e.g., `100.0`) instead of integers
+- **Statistics Data Structure**: Properly handle differences between `statistics_closed` and `statistics_live`:
+  - OHLC fields (`open_price`, `closed_price`, `donch_top`, `donch_bot`) are now optional (only present in closed stats)
+  - Added `order_type` field for live order statistics
+  - Added `mod_rank` field for mod item statistics
+
+### Added
+
+- Helper methods `is_closed_trade()` and `is_live_order()` on `StatisticEntry`
+- Integration tests for statistics endpoint covering regular items, mods, and archon mods
+
 ## [0.3.1] - 2026-01-11
 
 ### Added
