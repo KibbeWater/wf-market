@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-01-11
+
+### Added
+
+- **Client-level Item Index**: Items are now automatically fetched and indexed when building a client
+  - `Client::items()` - access the loaded items
+  - `Client::get_item_by_id()` / `get_item_by_slug()` - O(1) item lookups
+  - `order.get_item()` - direct item access from any order type
+- **Standalone Item Fetching**: `ItemIndex::fetch()` and `ItemIndex::fetch_with_config()` to fetch items without a client
+- **Sync Client Construction**: `ClientBuilder::build_with_items()` for synchronous client creation with pre-loaded items
+- **Cached Client Construction**: `ClientBuilder::build_with_cache()` uses cached items if less than 1 day old
+- **Item Revalidation**: `Client::revalidate_items()` to refresh items for long-running applications
+- **Item Type Detection**: `Item::is_regular()` returns true for items that are neither mods nor sculptures
+
+### Changed
+
+- **BREAKING**: `ClientBuilder::build()` is now async and automatically fetches items
+  - Before: `Client::builder().build()?`
+  - After: `Client::builder().build().await?`
+
 ## [0.2.2] - 2026-01-10
 
 ### Fixed
