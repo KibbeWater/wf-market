@@ -150,11 +150,13 @@ pub struct StatisticEntry {
 
 impl StatisticEntry {
     /// Returns `true` if no trades occurred in this period.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.volume == 0
     }
 
     /// Returns the price range (spread) for this period.
+    #[must_use]
     pub fn price_range(&self) -> i32 {
         self.max_price - self.min_price
     }
@@ -163,6 +165,7 @@ impl StatisticEntry {
     ///
     /// Returns `None` if Donchian channel data is not available
     /// (e.g., for live statistics).
+    #[must_use]
     pub fn donchian_width(&self) -> Option<i32> {
         match (self.donch_top, self.donch_bot) {
             (Some(top), Some(bot)) => Some(top - bot),
@@ -173,6 +176,7 @@ impl StatisticEntry {
     /// Returns `true` if this entry is from closed/completed trades.
     ///
     /// Closed trade entries have OHLC data (open_price, closed_price).
+    #[must_use]
     pub fn is_closed_trade(&self) -> bool {
         self.open_price.is_some()
     }
@@ -180,6 +184,7 @@ impl StatisticEntry {
     /// Returns `true` if this entry is from live orders.
     ///
     /// Live order entries have order_type instead of OHLC data.
+    #[must_use]
     pub fn is_live_order(&self) -> bool {
         self.order_type.is_some()
     }
@@ -206,11 +211,13 @@ pub struct TimeframedStatistics {
 
 impl TimeframedStatistics {
     /// Get the most recent hourly data point.
+    #[must_use]
     pub fn latest_hourly(&self) -> Option<&StatisticEntry> {
         self.hours_48.last()
     }
 
     /// Get the most recent daily data point.
+    #[must_use]
     pub fn latest_daily(&self) -> Option<&StatisticEntry> {
         self.days_90.last()
     }
@@ -218,6 +225,7 @@ impl TimeframedStatistics {
     /// Calculate the average price over the last 48 hours.
     ///
     /// Returns `None` if there are no data points with volume.
+    #[must_use]
     pub fn avg_price_48h(&self) -> Option<f64> {
         let entries: Vec<_> = self.hours_48.iter().filter(|e| e.volume > 0).collect();
         if entries.is_empty() {
@@ -230,6 +238,7 @@ impl TimeframedStatistics {
     /// Calculate the average price over the last 90 days.
     ///
     /// Returns `None` if there are no data points with volume.
+    #[must_use]
     pub fn avg_price_90d(&self) -> Option<f64> {
         let entries: Vec<_> = self.days_90.iter().filter(|e| e.volume > 0).collect();
         if entries.is_empty() {
@@ -240,11 +249,13 @@ impl TimeframedStatistics {
     }
 
     /// Calculate total volume over the last 48 hours.
+    #[must_use]
     pub fn total_volume_48h(&self) -> i32 {
         self.hours_48.iter().map(|e| e.volume).sum()
     }
 
     /// Calculate total volume over the last 90 days.
+    #[must_use]
     pub fn total_volume_90d(&self) -> i32 {
         self.days_90.iter().map(|e| e.volume).sum()
     }
@@ -253,22 +264,22 @@ impl TimeframedStatistics {
     ///
     /// Returns a sorted vector of unique mod ranks found in both 48-hour and 90-day data.
     /// Returns an empty vector for non-mod items.
+    #[must_use]
     pub fn available_mod_ranks(&self) -> Vec<i32> {
-        let mut ranks: Vec<i32> = self
-            .hours_48
+        use std::collections::BTreeSet;
+
+        self.hours_48
             .iter()
             .chain(self.days_90.iter())
             .filter_map(|e| e.mod_rank)
-            .collect();
-
-        ranks.sort_unstable();
-        ranks.dedup();
-        ranks
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect()
     }
 
     /// Filter entries to a specific mod rank, returning a view.
     ///
-    /// This is an internal helper used by `ItemStatistics::for_mod_rank`.
+    /// This is an internal helper used by `ItemStatistics::stats_for_rank`.
     fn filter_by_rank(&self, rank: i32) -> TimeframedStatisticsView<'_> {
         TimeframedStatisticsView {
             hours_48: self
@@ -322,6 +333,7 @@ impl ItemStatistics {
     /// Get the most recent average price from closed trades (daily).
     ///
     /// This is often the most useful single price indicator.
+    #[must_use]
     pub fn recent_avg_price(&self) -> Option<f64> {
         self.statistics_closed
             .latest_daily()
@@ -330,6 +342,7 @@ impl ItemStatistics {
     }
 
     /// Get the most recent median price from closed trades (daily).
+    #[must_use]
     pub fn recent_median_price(&self) -> Option<f64> {
         self.statistics_closed
             .latest_daily()
@@ -340,6 +353,7 @@ impl ItemStatistics {
     /// Check if there's enough trading activity for reliable statistics.
     ///
     /// Returns `true` if there were trades in at least 7 of the last 90 days.
+    #[must_use]
     pub fn has_sufficient_data(&self) -> bool {
         let days_with_trades = self
             .statistics_closed
@@ -354,6 +368,7 @@ impl ItemStatistics {
     ///
     /// Returns `true` if any statistic entry has a `mod_rank` field,
     /// indicating this is a mod item with rank-specific statistics.
+    #[must_use]
     pub fn is_mod_item(&self) -> bool {
         self.statistics_closed
             .hours_48
@@ -375,20 +390,20 @@ impl ItemStatistics {
     /// let stats = client.get_item_statistics("archon_flow").await?;
     /// let ranks = stats.available_mod_ranks(); // e.g., [0, 10]
     /// ```
+    #[must_use]
     pub fn available_mod_ranks(&self) -> Vec<i32> {
-        let mut ranks: Vec<i32> = self
-            .statistics_closed
+        use std::collections::BTreeSet;
+
+        self.statistics_closed
             .hours_48
             .iter()
             .chain(self.statistics_closed.days_90.iter())
             .chain(self.statistics_live.hours_48.iter())
             .chain(self.statistics_live.days_90.iter())
             .filter_map(|e| e.mod_rank)
-            .collect();
-
-        ranks.sort_unstable();
-        ranks.dedup();
-        ranks
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect()
     }
 
     /// Get statistics filtered to a specific mod rank.
@@ -403,10 +418,10 @@ impl ItemStatistics {
     ///
     /// ```ignore
     /// let stats = client.get_item_statistics("archon_flow").await?;
-    /// let rank10 = stats.for_mod_rank(10)?;
+    /// let rank10 = stats.stats_for_rank(10)?;
     /// println!("Max rank avg price: {:?}", rank10.recent_avg_price());
     /// ```
-    pub fn for_mod_rank(&self, rank: i32) -> crate::error::Result<ItemStatisticsView<'_>> {
+    pub fn stats_for_rank(&self, rank: i32) -> crate::error::Result<ItemStatisticsView<'_>> {
         let available = self.available_mod_ranks();
         if !available.contains(&rank) {
             return Err(crate::error::Error::not_found(format!(
@@ -444,7 +459,7 @@ impl ItemStatistics {
                 "max_rank_stats() requires a mod item with mod_rank data".into(),
             )
         })?;
-        self.for_mod_rank(max_rank)
+        self.stats_for_rank(max_rank)
     }
 
     /// Get statistics for unranked (rank 0) mods.
@@ -469,7 +484,7 @@ impl ItemStatistics {
                 "unranked_stats() requires a mod item with mod_rank data".into(),
             ));
         }
-        self.for_mod_rank(0)
+        self.stats_for_rank(0)
     }
 }
 
@@ -488,11 +503,13 @@ pub struct TimeframedStatisticsView<'a> {
 
 impl<'a> TimeframedStatisticsView<'a> {
     /// Get the most recent hourly data point.
+    #[must_use]
     pub fn latest_hourly(&self) -> Option<&StatisticEntry> {
         self.hours_48.last().copied()
     }
 
     /// Get the most recent daily data point.
+    #[must_use]
     pub fn latest_daily(&self) -> Option<&StatisticEntry> {
         self.days_90.last().copied()
     }
@@ -500,6 +517,7 @@ impl<'a> TimeframedStatisticsView<'a> {
     /// Calculate the average price over the last 48 hours.
     ///
     /// Returns `None` if there are no data points with volume.
+    #[must_use]
     pub fn avg_price_48h(&self) -> Option<f64> {
         let entries: Vec<_> = self.hours_48.iter().filter(|e| e.volume > 0).collect();
         if entries.is_empty() {
@@ -512,6 +530,7 @@ impl<'a> TimeframedStatisticsView<'a> {
     /// Calculate the average price over the last 90 days.
     ///
     /// Returns `None` if there are no data points with volume.
+    #[must_use]
     pub fn avg_price_90d(&self) -> Option<f64> {
         let entries: Vec<_> = self.days_90.iter().filter(|e| e.volume > 0).collect();
         if entries.is_empty() {
@@ -522,11 +541,13 @@ impl<'a> TimeframedStatisticsView<'a> {
     }
 
     /// Calculate total volume over the last 48 hours.
+    #[must_use]
     pub fn total_volume_48h(&self) -> i32 {
         self.hours_48.iter().map(|e| e.volume).sum()
     }
 
     /// Calculate total volume over the last 90 days.
+    #[must_use]
     pub fn total_volume_90d(&self) -> i32 {
         self.days_90.iter().map(|e| e.volume).sum()
     }
@@ -563,6 +584,7 @@ impl<'a> ItemStatisticsView<'a> {
     /// Get the most recent average price from closed trades (daily).
     ///
     /// This is often the most useful single price indicator.
+    #[must_use]
     pub fn recent_avg_price(&self) -> Option<f64> {
         self.statistics_closed
             .latest_daily()
@@ -571,6 +593,7 @@ impl<'a> ItemStatisticsView<'a> {
     }
 
     /// Get the most recent median price from closed trades (daily).
+    #[must_use]
     pub fn recent_median_price(&self) -> Option<f64> {
         self.statistics_closed
             .latest_daily()
@@ -581,6 +604,7 @@ impl<'a> ItemStatisticsView<'a> {
     /// Check if there's enough trading activity for reliable statistics.
     ///
     /// Returns `true` if there were trades in at least 7 of the last 90 days.
+    #[must_use]
     pub fn has_sufficient_data(&self) -> bool {
         let days_with_trades = self
             .statistics_closed
@@ -996,11 +1020,11 @@ mod tests {
     }
 
     #[test]
-    fn test_for_mod_rank_success() {
+    fn test_stats_for_rank_success() {
         let stats = make_mod_item_statistics();
 
         // Filter to rank 10
-        let rank10 = stats.for_mod_rank(10).unwrap();
+        let rank10 = stats.stats_for_rank(10).unwrap();
 
         // Should only have rank 10 entries
         assert_eq!(rank10.statistics_closed.hours_48.len(), 1);
@@ -1012,18 +1036,18 @@ mod tests {
         assert_eq!(rank10.statistics_closed.days_90[0].avg_price, 110.0);
 
         // Filter to rank 0
-        let rank0 = stats.for_mod_rank(0).unwrap();
+        let rank0 = stats.stats_for_rank(0).unwrap();
         assert_eq!(rank0.statistics_closed.hours_48.len(), 1);
         assert_eq!(rank0.statistics_closed.hours_48[0].mod_rank, Some(0));
         assert_eq!(rank0.statistics_closed.hours_48[0].avg_price, 20.0);
     }
 
     #[test]
-    fn test_for_mod_rank_not_found() {
+    fn test_stats_for_rank_not_found() {
         let stats = make_mod_item_statistics();
 
         // Try to filter to a rank that doesn't exist
-        let result = stats.for_mod_rank(5);
+        let result = stats.stats_for_rank(5);
         assert!(result.is_err());
 
         let err = result.unwrap_err();
@@ -1101,7 +1125,7 @@ mod tests {
     #[test]
     fn test_view_helper_methods() {
         let stats = make_mod_item_statistics();
-        let rank10 = stats.for_mod_rank(10).unwrap();
+        let rank10 = stats.stats_for_rank(10).unwrap();
 
         // Test TimeframedStatisticsView methods
         assert_eq!(
@@ -1150,10 +1174,10 @@ mod tests {
             },
         };
 
-        let rank10 = stats.for_mod_rank(10).unwrap();
+        let rank10 = stats.stats_for_rank(10).unwrap();
         assert!(rank10.has_sufficient_data()); // 7 days with trades
 
-        let rank0 = stats.for_mod_rank(0).unwrap();
+        let rank0 = stats.stats_for_rank(0).unwrap();
         assert!(!rank0.has_sufficient_data()); // Only 3 days with trades
     }
 
