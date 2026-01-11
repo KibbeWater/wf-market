@@ -157,6 +157,7 @@
 //! - `rustls-tls`: Use rustls for TLS (default)
 //! - `native-tls`: Use native TLS instead of rustls
 //! - `websocket`: Enable WebSocket support for real-time updates
+//! - `v1-api`: Enable deprecated V1 API endpoints (statistics)
 
 // Modules
 mod api;
@@ -226,3 +227,7 @@ pub use models::{
     UserStatus,
     WithPassword,
 };
+
+// V1 API model re-exports (deprecated, feature-gated)
+#[cfg(feature = "v1-api")]
+pub use models::{ItemStatistics, StatisticEntry, TimeframedStatistics};

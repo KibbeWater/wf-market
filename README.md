@@ -377,6 +377,50 @@ let client = Client::builder()
 | `rustls-tls` | Yes | Use rustls for TLS |
 | `native-tls` | No | Use native TLS instead of rustls |
 | `websocket` | No | Enable WebSocket support for real-time updates |
+| `v1-api` | No | Enable deprecated V1 API endpoints (statistics) |
+
+## V1 API Endpoints (Deprecated)
+
+Some endpoints are only available in the legacy V1 API. Enable them with the `v1-api` feature:
+
+```toml
+[dependencies]
+wf-market = { version = "0.3", features = ["v1-api"] }
+```
+
+> **Warning**: V1 endpoints are deprecated and will be removed when V2 equivalents become available.
+
+### Item Statistics
+
+Get historical price and volume statistics for an item:
+
+```rust
+use wf_market::Client;
+
+let client = Client::builder().build().await?;
+let stats = client.get_item_statistics("nikana_prime_set").await?;
+
+// Get recent average price from closed trades
+if let Some(price) = stats.recent_avg_price() {
+    println!("Recent average: {:.0}p", price);
+}
+
+// Analyze 48-hour trend (hourly data)
+for entry in &stats.statistics_closed.hours_48 {
+    if entry.volume > 0 {
+        println!("{}: {:.0}p avg ({} trades)",
+            entry.datetime.format("%H:%M"),
+            entry.avg_price,
+            entry.volume
+        );
+    }
+}
+
+// Check 90-day statistics
+let total_volume = stats.statistics_closed.total_volume_90d();
+let has_data = stats.has_sufficient_data();
+println!("90-day volume: {} (sufficient data: {})", total_volume, has_data);
+```
 
 ## Examples
 
