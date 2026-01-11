@@ -36,10 +36,14 @@
 //! # fn main() {}
 //! ```
 
+use std::sync::Arc;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use super::common::OrderType;
+use super::item::Item;
+use super::item_index::ItemIndex;
 use super::user::User;
 
 /// A trading order on warframe.market.
@@ -101,6 +105,11 @@ pub struct Order {
     /// Order group (default: 'all')
     #[serde(default)]
     pub group: Option<String>,
+
+    /// Item index for resolving item information.
+    /// This is injected by the client after deserialization.
+    #[serde(skip)]
+    items: Option<Arc<ItemIndex>>,
 }
 
 impl Order {
@@ -128,6 +137,33 @@ impl Order {
     pub fn is_sculpture_order(&self) -> bool {
         self.amber_stars.is_some() || self.cyan_stars.is_some()
     }
+
+    /// Get the item associated with this order.
+    ///
+    /// Returns `None` if the item index is not available or the item
+    /// doesn't exist in the index (which could happen if the index is stale).
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let orders = client.get_orders("nikana_prime_set").await?;
+    /// for order in &orders {
+    ///     if let Some(item) = order.get_item() {
+    ///         println!("{}: {}p", item.name(), order.platinum);
+    ///         if item.is_mod() {
+    ///             println!("  Max rank: {}", item.as_mod().unwrap().max_rank());
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    pub fn get_item(&self) -> Option<&Item> {
+        self.items.as_ref()?.get_by_id(&self.item_id)
+    }
+
+    /// Set the item index for this order (internal use).
+    pub(crate) fn set_item_index(&mut self, index: Arc<ItemIndex>) {
+        self.items = Some(index);
+    }
 }
 
 /// An order listing with associated user information.
@@ -153,6 +189,19 @@ impl OrderListing {
     /// Get just the order without user info.
     pub fn into_order(self) -> Order {
         self.order
+    }
+
+    /// Get the item associated with this order.
+    ///
+    /// Returns `None` if the item index is not available or the item
+    /// doesn't exist in the index.
+    pub fn get_item(&self) -> Option<&Item> {
+        self.order.get_item()
+    }
+
+    /// Set the item index for this order (internal use).
+    pub(crate) fn set_item_index(&mut self, index: Arc<ItemIndex>) {
+        self.order.set_item_index(index);
     }
 }
 
@@ -307,6 +356,14 @@ impl OwnedOrder {
     pub fn into_order(self) -> Order {
         self.order
     }
+
+    /// Get the item associated with this order.
+    ///
+    /// Returns `None` if the item index is not available or the item
+    /// doesn't exist in the index.
+    pub fn get_item(&self) -> Option<&Item> {
+        self.order.get_item()
+    }
 }
 
 impl std::ops::Deref for OwnedOrder {
@@ -350,6 +407,16 @@ impl TopOrders {
             _ => None,
         }
     }
+
+    /// Set the item index for all orders (internal use).
+    pub(crate) fn set_item_index(&mut self, index: Arc<ItemIndex>) {
+        for order in &mut self.buy {
+            order.set_item_index(Arc::clone(&index));
+        }
+        for order in &mut self.sell {
+            order.set_item_index(Arc::clone(&index));
+        }
+    }
 }
 
 #[cfg(test)]
@@ -373,6 +440,7 @@ mod tests {
             amber_stars: None,
             cyan_stars: None,
             group: None,
+            items: None,
         }
     }
 

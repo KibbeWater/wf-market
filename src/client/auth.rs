@@ -117,6 +117,7 @@ impl Client<Unauthenticated> {
             self.config,
             limiter,
             credentials,
+            self.items,
         ))
     }
 

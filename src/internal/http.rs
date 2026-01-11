@@ -1,8 +1,10 @@
 //! HTTP client utilities.
 
 use reqwest::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue, USER_AGENT};
+use serde::Deserialize;
 
-use crate::models::{Language, Platform};
+use crate::error::{ApiErrorResponse, Error, Result};
+use crate::models::{Item, Language, Platform};
 
 /// Base URL for the V2 API.
 pub const BASE_URL: &str = "https://api.warframe.market/v2";
@@ -70,6 +72,49 @@ pub fn build_authenticated_client(
     );
 
     reqwest::Client::builder().default_headers(headers).build()
+}
+
+/// Internal API response wrapper.
+#[derive(Deserialize)]
+struct ApiResponse<T> {
+    data: T,
+}
+
+/// Fetch all items from the API (internal use during client construction).
+///
+/// This function is used by the client builder to populate the item index.
+pub async fn fetch_items_internal(http: &reqwest::Client) -> Result<Vec<Item>> {
+    let response = http
+        .get(format!("{}/items", BASE_URL))
+        .send()
+        .await
+        .map_err(Error::Network)?;
+
+    let status = response.status();
+
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+
+        if let Ok(error_response) = serde_json::from_str::<ApiErrorResponse>(&body) {
+            return Err(Error::api_with_response(
+                status,
+                "Failed to fetch items during client initialization",
+                error_response,
+            ));
+        }
+
+        return Err(Error::api(
+            status,
+            format!("Failed to fetch items: {}", body),
+        ));
+    }
+
+    let body = response.text().await.map_err(Error::Network)?;
+
+    let api_response: ApiResponse<Vec<Item>> =
+        serde_json::from_str(&body).map_err(|e| Error::parse_with_body(e.to_string(), body))?;
+
+    Ok(api_response.data)
 }
 
 #[cfg(test)]

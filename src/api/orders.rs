@@ -78,7 +78,14 @@ impl<S: AuthState> Client<S> {
         let api_response: ApiResponse<Vec<OrderListing>> =
             serde_json::from_str(&body).map_err(|e| Error::parse_with_body(e.to_string(), body))?;
 
-        Ok(api_response.data)
+        // Inject item index into orders
+        let mut orders = api_response.data;
+        let item_index = self.items_arc();
+        for order in &mut orders {
+            order.set_item_index(item_index.clone());
+        }
+
+        Ok(orders)
     }
 
     /// Get orders for an item without user information.
@@ -105,6 +112,7 @@ impl<S: AuthState> Client<S> {
     /// ```
     pub async fn get_listings(&self, slug: &str) -> Result<Vec<Order>> {
         let listings = self.get_orders(slug).await?;
+        // Item index is already injected via get_orders
         Ok(listings.into_iter().map(|l| l.order).collect())
     }
 
@@ -177,7 +185,11 @@ impl<S: AuthState> Client<S> {
         let api_response: ApiResponse<TopOrders> =
             serde_json::from_str(&body).map_err(|e| Error::parse_with_body(e.to_string(), body))?;
 
-        Ok(api_response.data)
+        // Inject item index into orders
+        let mut top_orders = api_response.data;
+        top_orders.set_item_index(self.items_arc());
+
+        Ok(top_orders)
     }
 
     /// Get recent orders from the last 4 hours.
@@ -240,7 +252,14 @@ impl<S: AuthState> Client<S> {
         let api_response: ApiResponse<Vec<OrderListing>> =
             serde_json::from_str(&body).map_err(|e| Error::parse_with_body(e.to_string(), body))?;
 
-        Ok(api_response.data)
+        // Inject item index into orders
+        let mut orders = api_response.data;
+        let item_index = self.items_arc();
+        for order in &mut orders {
+            order.set_item_index(item_index.clone());
+        }
+
+        Ok(orders)
     }
 
     /// Get all public orders for a specific user.
@@ -305,7 +324,14 @@ impl<S: AuthState> Client<S> {
         let api_response: ApiResponse<Vec<Order>> =
             serde_json::from_str(&body).map_err(|e| Error::parse_with_body(e.to_string(), body))?;
 
-        Ok(api_response.data)
+        // Inject item index into orders
+        let mut orders = api_response.data;
+        let item_index = self.items_arc();
+        for order in &mut orders {
+            order.set_item_index(item_index.clone());
+        }
+
+        Ok(orders)
     }
 
     /// Get a single order by ID.
@@ -360,7 +386,11 @@ impl<S: AuthState> Client<S> {
         let api_response: ApiResponse<Order> =
             serde_json::from_str(&body).map_err(|e| Error::parse_with_body(e.to_string(), body))?;
 
-        Ok(api_response.data)
+        // Inject item index into order
+        let mut order = api_response.data;
+        order.set_item_index(self.items_arc());
+
+        Ok(order)
     }
 }
 
@@ -423,7 +453,18 @@ impl Client<Authenticated> {
         let api_response: ApiResponse<Vec<Order>> =
             serde_json::from_str(&body).map_err(|e| Error::parse_with_body(e.to_string(), body))?;
 
-        Ok(api_response.data.into_iter().map(OwnedOrder::new).collect())
+        // Inject item index into orders
+        let item_index = self.items_arc();
+        let orders: Vec<OwnedOrder> = api_response
+            .data
+            .into_iter()
+            .map(|mut order| {
+                order.set_item_index(item_index.clone());
+                OwnedOrder::new(order)
+            })
+            .collect();
+
+        Ok(orders)
     }
 
     /// Create a new order.
@@ -490,7 +531,11 @@ impl Client<Authenticated> {
         let api_response: ApiResponse<Order> =
             serde_json::from_str(&body).map_err(|e| Error::parse_with_body(e.to_string(), body))?;
 
-        Ok(OwnedOrder::new(api_response.data))
+        // Inject item index into order
+        let mut order = api_response.data;
+        order.set_item_index(self.items_arc());
+
+        Ok(OwnedOrder::new(order))
     }
 
     /// Update an existing order.
@@ -566,7 +611,11 @@ impl Client<Authenticated> {
         let api_response: ApiResponse<Order> =
             serde_json::from_str(&body).map_err(|e| Error::parse_with_body(e.to_string(), body))?;
 
-        Ok(OwnedOrder::new(api_response.data))
+        // Inject item index into order
+        let mut order = api_response.data;
+        order.set_item_index(self.items_arc());
+
+        Ok(OwnedOrder::new(order))
     }
 
     /// Delete an order.
