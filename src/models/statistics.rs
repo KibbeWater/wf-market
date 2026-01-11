@@ -248,6 +248,41 @@ impl TimeframedStatistics {
     pub fn total_volume_90d(&self) -> i32 {
         self.days_90.iter().map(|e| e.volume).sum()
     }
+
+    /// Get all available mod ranks in this timeframe.
+    ///
+    /// Returns a sorted vector of unique mod ranks found in both 48-hour and 90-day data.
+    /// Returns an empty vector for non-mod items.
+    pub fn available_mod_ranks(&self) -> Vec<i32> {
+        let mut ranks: Vec<i32> = self
+            .hours_48
+            .iter()
+            .chain(self.days_90.iter())
+            .filter_map(|e| e.mod_rank)
+            .collect();
+
+        ranks.sort_unstable();
+        ranks.dedup();
+        ranks
+    }
+
+    /// Filter entries to a specific mod rank, returning a view.
+    ///
+    /// This is an internal helper used by `ItemStatistics::for_mod_rank`.
+    fn filter_by_rank(&self, rank: i32) -> TimeframedStatisticsView<'_> {
+        TimeframedStatisticsView {
+            hours_48: self
+                .hours_48
+                .iter()
+                .filter(|e| e.mod_rank == Some(rank))
+                .collect(),
+            days_90: self
+                .days_90
+                .iter()
+                .filter(|e| e.mod_rank == Some(rank))
+                .collect(),
+        }
+    }
 }
 
 /// Complete item trading statistics.
@@ -284,6 +319,247 @@ pub struct ItemStatistics {
 }
 
 impl ItemStatistics {
+    /// Get the most recent average price from closed trades (daily).
+    ///
+    /// This is often the most useful single price indicator.
+    pub fn recent_avg_price(&self) -> Option<f64> {
+        self.statistics_closed
+            .latest_daily()
+            .filter(|e| e.volume > 0)
+            .map(|e| e.avg_price)
+    }
+
+    /// Get the most recent median price from closed trades (daily).
+    pub fn recent_median_price(&self) -> Option<f64> {
+        self.statistics_closed
+            .latest_daily()
+            .filter(|e| e.volume > 0)
+            .map(|e| e.median)
+    }
+
+    /// Check if there's enough trading activity for reliable statistics.
+    ///
+    /// Returns `true` if there were trades in at least 7 of the last 90 days.
+    pub fn has_sufficient_data(&self) -> bool {
+        let days_with_trades = self
+            .statistics_closed
+            .days_90
+            .iter()
+            .filter(|e| e.volume > 0)
+            .count();
+        days_with_trades >= 7
+    }
+
+    /// Check if this item has mod rank data.
+    ///
+    /// Returns `true` if any statistic entry has a `mod_rank` field,
+    /// indicating this is a mod item with rank-specific statistics.
+    pub fn is_mod_item(&self) -> bool {
+        self.statistics_closed
+            .hours_48
+            .iter()
+            .chain(self.statistics_closed.days_90.iter())
+            .chain(self.statistics_live.hours_48.iter())
+            .chain(self.statistics_live.days_90.iter())
+            .any(|e| e.mod_rank.is_some())
+    }
+
+    /// Get all available mod ranks for this item.
+    ///
+    /// Returns a sorted vector of unique mod ranks found across all statistics.
+    /// Returns an empty vector for non-mod items.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let stats = client.get_item_statistics("archon_flow").await?;
+    /// let ranks = stats.available_mod_ranks(); // e.g., [0, 10]
+    /// ```
+    pub fn available_mod_ranks(&self) -> Vec<i32> {
+        let mut ranks: Vec<i32> = self
+            .statistics_closed
+            .hours_48
+            .iter()
+            .chain(self.statistics_closed.days_90.iter())
+            .chain(self.statistics_live.hours_48.iter())
+            .chain(self.statistics_live.days_90.iter())
+            .filter_map(|e| e.mod_rank)
+            .collect();
+
+        ranks.sort_unstable();
+        ranks.dedup();
+        ranks
+    }
+
+    /// Get statistics filtered to a specific mod rank.
+    ///
+    /// Returns a zero-copy view containing only entries matching the specified rank.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Error::NotFound` if the specified rank is not available for this item.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let stats = client.get_item_statistics("archon_flow").await?;
+    /// let rank10 = stats.for_mod_rank(10)?;
+    /// println!("Max rank avg price: {:?}", rank10.recent_avg_price());
+    /// ```
+    pub fn for_mod_rank(&self, rank: i32) -> crate::error::Result<ItemStatisticsView<'_>> {
+        let available = self.available_mod_ranks();
+        if !available.contains(&rank) {
+            return Err(crate::error::Error::not_found(format!(
+                "mod rank {} (available ranks: {:?})",
+                rank, available
+            )));
+        }
+
+        Ok(ItemStatisticsView {
+            statistics_closed: self.statistics_closed.filter_by_rank(rank),
+            statistics_live: self.statistics_live.filter_by_rank(rank),
+        })
+    }
+
+    /// Get statistics for the maximum (highest) mod rank.
+    ///
+    /// This is a convenience method for getting max-rank mod statistics,
+    /// which is typically what traders want for pricing.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Error::InvalidConfig` if this is not a mod item.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let stats = client.get_item_statistics("archon_flow").await?;
+    /// let max_rank = stats.max_rank_stats()?;
+    /// println!("Max rank avg: {:?}", max_rank.recent_avg_price());
+    /// ```
+    pub fn max_rank_stats(&self) -> crate::error::Result<ItemStatisticsView<'_>> {
+        let ranks = self.available_mod_ranks();
+        let max_rank = ranks.into_iter().max().ok_or_else(|| {
+            crate::error::Error::InvalidConfig(
+                "max_rank_stats() requires a mod item with mod_rank data".into(),
+            )
+        })?;
+        self.for_mod_rank(max_rank)
+    }
+
+    /// Get statistics for unranked (rank 0) mods.
+    ///
+    /// This is a convenience method for getting unranked mod statistics.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Error::InvalidConfig` if this is not a mod item.
+    /// Returns `Error::NotFound` if rank 0 is not available (rare edge case).
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let stats = client.get_item_statistics("archon_flow").await?;
+    /// let unranked = stats.unranked_stats()?;
+    /// println!("Unranked avg: {:?}", unranked.recent_avg_price());
+    /// ```
+    pub fn unranked_stats(&self) -> crate::error::Result<ItemStatisticsView<'_>> {
+        if !self.is_mod_item() {
+            return Err(crate::error::Error::InvalidConfig(
+                "unranked_stats() requires a mod item with mod_rank data".into(),
+            ));
+        }
+        self.for_mod_rank(0)
+    }
+}
+
+/// A zero-copy view into timeframed statistics filtered by mod rank.
+///
+/// This type provides the same interface as [`TimeframedStatistics`] but
+/// holds references to filtered entries rather than owning them.
+#[derive(Debug, Clone)]
+pub struct TimeframedStatisticsView<'a> {
+    /// Hourly data points for the last 48 hours (filtered).
+    pub hours_48: Vec<&'a StatisticEntry>,
+
+    /// Daily data points for the last 90 days (filtered).
+    pub days_90: Vec<&'a StatisticEntry>,
+}
+
+impl<'a> TimeframedStatisticsView<'a> {
+    /// Get the most recent hourly data point.
+    pub fn latest_hourly(&self) -> Option<&StatisticEntry> {
+        self.hours_48.last().copied()
+    }
+
+    /// Get the most recent daily data point.
+    pub fn latest_daily(&self) -> Option<&StatisticEntry> {
+        self.days_90.last().copied()
+    }
+
+    /// Calculate the average price over the last 48 hours.
+    ///
+    /// Returns `None` if there are no data points with volume.
+    pub fn avg_price_48h(&self) -> Option<f64> {
+        let entries: Vec<_> = self.hours_48.iter().filter(|e| e.volume > 0).collect();
+        if entries.is_empty() {
+            return None;
+        }
+        let sum: f64 = entries.iter().map(|e| e.avg_price).sum();
+        Some(sum / entries.len() as f64)
+    }
+
+    /// Calculate the average price over the last 90 days.
+    ///
+    /// Returns `None` if there are no data points with volume.
+    pub fn avg_price_90d(&self) -> Option<f64> {
+        let entries: Vec<_> = self.days_90.iter().filter(|e| e.volume > 0).collect();
+        if entries.is_empty() {
+            return None;
+        }
+        let sum: f64 = entries.iter().map(|e| e.avg_price).sum();
+        Some(sum / entries.len() as f64)
+    }
+
+    /// Calculate total volume over the last 48 hours.
+    pub fn total_volume_48h(&self) -> i32 {
+        self.hours_48.iter().map(|e| e.volume).sum()
+    }
+
+    /// Calculate total volume over the last 90 days.
+    pub fn total_volume_90d(&self) -> i32 {
+        self.days_90.iter().map(|e| e.volume).sum()
+    }
+}
+
+/// A zero-copy view into item statistics filtered by mod rank.
+///
+/// This type provides the same interface as [`ItemStatistics`] but
+/// holds references to filtered entries rather than owning them.
+///
+/// # Example
+///
+/// ```ignore
+/// let stats = client.get_item_statistics("archon_flow").await?;
+///
+/// // Get max rank statistics
+/// let max_rank = stats.max_rank_stats()?;
+/// println!("Max rank avg: {:?}", max_rank.recent_avg_price());
+///
+/// // Compare with unranked
+/// let unranked = stats.unranked_stats()?;
+/// println!("Unranked avg: {:?}", unranked.recent_avg_price());
+/// ```
+#[derive(Debug, Clone)]
+pub struct ItemStatisticsView<'a> {
+    /// Statistics from completed/closed trades (filtered).
+    pub statistics_closed: TimeframedStatisticsView<'a>,
+
+    /// Statistics from live/pending orders (filtered).
+    pub statistics_live: TimeframedStatisticsView<'a>,
+}
+
+impl<'a> ItemStatisticsView<'a> {
     /// Get the most recent average price from closed trades (daily).
     ///
     /// This is often the most useful single price indicator.
@@ -601,5 +877,300 @@ mod tests {
         let live = &stats.statistics_live.hours_48[0];
         assert!(live.is_live_order());
         assert_eq!(live.order_type, Some("sell".to_string()));
+    }
+
+    // ==================== Mod Rank Filtering Tests ====================
+
+    /// Create a closed trade entry with a specific mod rank.
+    fn make_closed_entry_with_rank(volume: i32, avg_price: f64, mod_rank: i32) -> StatisticEntry {
+        StatisticEntry {
+            id: format!("test_rank_{}", mod_rank),
+            datetime: Utc::now(),
+            volume,
+            min_price: 10,
+            max_price: 20,
+            open_price: Some(12),
+            closed_price: Some(18),
+            avg_price,
+            wa_price: avg_price,
+            median: avg_price,
+            moving_avg: Some(avg_price),
+            donch_top: Some(25),
+            donch_bot: Some(5),
+            order_type: None,
+            mod_rank: Some(mod_rank),
+        }
+    }
+
+    /// Create a live order entry with a specific mod rank.
+    fn make_live_entry_with_rank(
+        volume: i32,
+        avg_price: f64,
+        order_type: &str,
+        mod_rank: i32,
+    ) -> StatisticEntry {
+        StatisticEntry {
+            id: format!("test_live_rank_{}", mod_rank),
+            datetime: Utc::now(),
+            volume,
+            min_price: 10,
+            max_price: 20,
+            open_price: None,
+            closed_price: None,
+            avg_price,
+            wa_price: avg_price,
+            median: avg_price,
+            moving_avg: None,
+            donch_top: None,
+            donch_bot: None,
+            order_type: Some(order_type.to_string()),
+            mod_rank: Some(mod_rank),
+        }
+    }
+
+    /// Helper to create mod item statistics with rank 0 and rank 10 entries.
+    fn make_mod_item_statistics() -> ItemStatistics {
+        ItemStatistics {
+            statistics_closed: TimeframedStatistics {
+                hours_48: vec![
+                    make_closed_entry_with_rank(5, 20.0, 0),   // unranked: 20p
+                    make_closed_entry_with_rank(3, 100.0, 10), // max rank: 100p
+                ],
+                days_90: vec![
+                    make_closed_entry_with_rank(50, 25.0, 0),   // unranked: 25p
+                    make_closed_entry_with_rank(30, 110.0, 10), // max rank: 110p
+                ],
+            },
+            statistics_live: TimeframedStatistics {
+                hours_48: vec![
+                    make_live_entry_with_rank(10, 22.0, "sell", 0),
+                    make_live_entry_with_rank(8, 105.0, "sell", 10),
+                ],
+                days_90: vec![],
+            },
+        }
+    }
+
+    #[test]
+    fn test_is_mod_item() {
+        // Mod item with mod_rank
+        let mod_stats = make_mod_item_statistics();
+        assert!(mod_stats.is_mod_item());
+
+        // Regular item without mod_rank
+        let regular_stats = ItemStatistics {
+            statistics_closed: TimeframedStatistics {
+                hours_48: vec![make_closed_entry(10, 50.0)],
+                days_90: vec![make_closed_entry(100, 55.0)],
+            },
+            statistics_live: TimeframedStatistics {
+                hours_48: vec![],
+                days_90: vec![],
+            },
+        };
+        assert!(!regular_stats.is_mod_item());
+    }
+
+    #[test]
+    fn test_available_mod_ranks() {
+        let stats = make_mod_item_statistics();
+        let ranks = stats.available_mod_ranks();
+
+        assert_eq!(ranks, vec![0, 10]);
+    }
+
+    #[test]
+    fn test_available_mod_ranks_empty_for_regular_items() {
+        let stats = ItemStatistics {
+            statistics_closed: TimeframedStatistics {
+                hours_48: vec![make_closed_entry(10, 50.0)],
+                days_90: vec![],
+            },
+            statistics_live: TimeframedStatistics {
+                hours_48: vec![],
+                days_90: vec![],
+            },
+        };
+
+        assert!(stats.available_mod_ranks().is_empty());
+    }
+
+    #[test]
+    fn test_for_mod_rank_success() {
+        let stats = make_mod_item_statistics();
+
+        // Filter to rank 10
+        let rank10 = stats.for_mod_rank(10).unwrap();
+
+        // Should only have rank 10 entries
+        assert_eq!(rank10.statistics_closed.hours_48.len(), 1);
+        assert_eq!(rank10.statistics_closed.hours_48[0].mod_rank, Some(10));
+        assert_eq!(rank10.statistics_closed.hours_48[0].avg_price, 100.0);
+
+        assert_eq!(rank10.statistics_closed.days_90.len(), 1);
+        assert_eq!(rank10.statistics_closed.days_90[0].mod_rank, Some(10));
+        assert_eq!(rank10.statistics_closed.days_90[0].avg_price, 110.0);
+
+        // Filter to rank 0
+        let rank0 = stats.for_mod_rank(0).unwrap();
+        assert_eq!(rank0.statistics_closed.hours_48.len(), 1);
+        assert_eq!(rank0.statistics_closed.hours_48[0].mod_rank, Some(0));
+        assert_eq!(rank0.statistics_closed.hours_48[0].avg_price, 20.0);
+    }
+
+    #[test]
+    fn test_for_mod_rank_not_found() {
+        let stats = make_mod_item_statistics();
+
+        // Try to filter to a rank that doesn't exist
+        let result = stats.for_mod_rank(5);
+        assert!(result.is_err());
+
+        let err = result.unwrap_err();
+        let err_str = format!("{}", err);
+        assert!(err_str.contains("not found"));
+        assert!(err_str.contains("mod rank 5"));
+    }
+
+    #[test]
+    fn test_max_rank_stats() {
+        let stats = make_mod_item_statistics();
+
+        let max_rank = stats.max_rank_stats().unwrap();
+
+        // Should be rank 10 stats
+        assert_eq!(max_rank.statistics_closed.hours_48[0].mod_rank, Some(10));
+        assert_eq!(max_rank.statistics_closed.hours_48[0].avg_price, 100.0);
+
+        // recent_avg_price should work on the view
+        assert_eq!(max_rank.recent_avg_price(), Some(110.0));
+    }
+
+    #[test]
+    fn test_unranked_stats() {
+        let stats = make_mod_item_statistics();
+
+        let unranked = stats.unranked_stats().unwrap();
+
+        // Should be rank 0 stats
+        assert_eq!(unranked.statistics_closed.hours_48[0].mod_rank, Some(0));
+        assert_eq!(unranked.statistics_closed.hours_48[0].avg_price, 20.0);
+
+        // recent_avg_price should work on the view
+        assert_eq!(unranked.recent_avg_price(), Some(25.0));
+    }
+
+    #[test]
+    fn test_max_rank_stats_non_mod_item() {
+        let stats = ItemStatistics {
+            statistics_closed: TimeframedStatistics {
+                hours_48: vec![make_closed_entry(10, 50.0)],
+                days_90: vec![],
+            },
+            statistics_live: TimeframedStatistics {
+                hours_48: vec![],
+                days_90: vec![],
+            },
+        };
+
+        let result = stats.max_rank_stats();
+        assert!(result.is_err());
+
+        let err = result.unwrap_err();
+        let err_str = format!("{}", err);
+        assert!(err_str.contains("mod item"));
+    }
+
+    #[test]
+    fn test_unranked_stats_non_mod_item() {
+        let stats = ItemStatistics {
+            statistics_closed: TimeframedStatistics {
+                hours_48: vec![make_closed_entry(10, 50.0)],
+                days_90: vec![],
+            },
+            statistics_live: TimeframedStatistics {
+                hours_48: vec![],
+                days_90: vec![],
+            },
+        };
+
+        let result = stats.unranked_stats();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_view_helper_methods() {
+        let stats = make_mod_item_statistics();
+        let rank10 = stats.for_mod_rank(10).unwrap();
+
+        // Test TimeframedStatisticsView methods
+        assert_eq!(
+            rank10.statistics_closed.latest_hourly().unwrap().avg_price,
+            100.0
+        );
+        assert_eq!(
+            rank10.statistics_closed.latest_daily().unwrap().avg_price,
+            110.0
+        );
+        assert_eq!(rank10.statistics_closed.avg_price_48h(), Some(100.0));
+        assert_eq!(rank10.statistics_closed.avg_price_90d(), Some(110.0));
+        assert_eq!(rank10.statistics_closed.total_volume_48h(), 3);
+        assert_eq!(rank10.statistics_closed.total_volume_90d(), 30);
+
+        // Test ItemStatisticsView methods
+        assert_eq!(rank10.recent_avg_price(), Some(110.0));
+        assert_eq!(rank10.recent_median_price(), Some(110.0));
+    }
+
+    #[test]
+    fn test_view_has_sufficient_data() {
+        // Create mod stats with enough days of data for rank 10
+        let mut days_90 = Vec::new();
+        for i in 0..10 {
+            days_90.push(make_closed_entry_with_rank(
+                if i < 7 { 10 } else { 0 },
+                100.0,
+                10,
+            ));
+            days_90.push(make_closed_entry_with_rank(
+                if i < 3 { 5 } else { 0 },
+                20.0,
+                0,
+            ));
+        }
+
+        let stats = ItemStatistics {
+            statistics_closed: TimeframedStatistics {
+                hours_48: vec![],
+                days_90,
+            },
+            statistics_live: TimeframedStatistics {
+                hours_48: vec![],
+                days_90: vec![],
+            },
+        };
+
+        let rank10 = stats.for_mod_rank(10).unwrap();
+        assert!(rank10.has_sufficient_data()); // 7 days with trades
+
+        let rank0 = stats.for_mod_rank(0).unwrap();
+        assert!(!rank0.has_sufficient_data()); // Only 3 days with trades
+    }
+
+    #[test]
+    fn test_timeframed_statistics_available_mod_ranks() {
+        let stats = TimeframedStatistics {
+            hours_48: vec![
+                make_closed_entry_with_rank(5, 20.0, 0),
+                make_closed_entry_with_rank(3, 100.0, 10),
+            ],
+            days_90: vec![
+                make_closed_entry_with_rank(50, 25.0, 0),
+                make_closed_entry_with_rank(30, 110.0, 5), // Different rank in days_90
+            ],
+        };
+
+        let ranks = stats.available_mod_ranks();
+        assert_eq!(ranks, vec![0, 5, 10]);
     }
 }
