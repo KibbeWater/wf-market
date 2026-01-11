@@ -6,6 +6,7 @@
 pub mod common;
 pub mod credentials;
 pub mod item;
+pub mod item_index;
 pub mod order;
 pub mod request;
 pub mod riven;
@@ -19,6 +20,7 @@ pub use common::{
 };
 pub use credentials::{Credentials, WithPassword};
 pub use item::{Item, ItemSet, ItemTranslation, ModView, SculptureView};
+pub use item_index::ItemIndex;
 pub use order::{Order, OrderListing, OwnedOrder, OwnedOrderId, TopOrders};
 pub use request::{CreateOrder, TopOrderFilters, UpdateOrder};
 pub use riven::{Riven, RivenAttribute, RivenAttributeTranslation, RivenTranslation};

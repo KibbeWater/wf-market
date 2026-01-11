@@ -211,6 +211,14 @@ impl Item {
         self.max_charges.is_some()
     }
 
+    /// Check if this item is a regular item (not a mod or sculpture).
+    ///
+    /// Regular items include prime parts, blueprints, relics, and other
+    /// tradable items that don't have mod ranks or sculpture properties.
+    pub fn is_regular(&self) -> bool {
+        !self.is_mod() && !self.is_sculpture()
+    }
+
     /// Get a mod-specific view of this item.
     ///
     /// Returns `Some(ModView)` if this item is a mod, `None` otherwise.
@@ -526,6 +534,399 @@ mod tests {
     fn test_non_sculpture_returns_none() {
         let item = make_test_item();
         assert!(item.as_sculpture().is_none());
+    }
+
+    // === Realistic item helper functions ===
+
+    fn make_archon_mod() -> Item {
+        Item {
+            id: "archon-flow-id".to_string(),
+            slug: "archon_flow".to_string(),
+            game_ref: Some("/Lotus/Upgrades/Mods/Warframe/AvatarArchonFlowMod".to_string()),
+            tradable: Some(true),
+            tags: vec!["mod".to_string(), "warframe".to_string()],
+            i18n: HashMap::from([(
+                "en".to_string(),
+                ItemTranslation {
+                    name: "Archon Flow".to_string(),
+                    icon: "/icons/archon_flow.png".to_string(),
+                    thumb: None,
+                    sub_icon: None,
+                    description: Some("Archon mod that increases energy capacity".to_string()),
+                    wiki_link: Some("https://warframe.fandom.com/wiki/Archon_Flow".to_string()),
+                },
+            )]),
+            rarity: Some(Rarity::Legendary),
+            vaulted: None,
+            ducats: None,
+            trading_tax: Some(1_000_000),
+            mastery_rank: None,
+            max_rank: Some(5),
+            max_charges: None,
+            max_amber_stars: None,
+            max_cyan_stars: None,
+            base_endo: None,
+            endo_multiplier: None,
+            set_root: None,
+            set_parts: None,
+            quantity_in_set: None,
+            bulk_tradable: None,
+            subtypes: None,
+        }
+    }
+
+    fn make_requiem_mod() -> Item {
+        Item {
+            id: "requiem-lohk-id".to_string(),
+            slug: "requiem_lohk".to_string(),
+            game_ref: Some("/Lotus/Upgrades/Mods/Melee/Requiem/RequiemLohkMod".to_string()),
+            tradable: Some(true),
+            tags: vec!["mod".to_string(), "requiem".to_string()],
+            i18n: HashMap::from([(
+                "en".to_string(),
+                ItemTranslation {
+                    name: "Requiem Lohk".to_string(),
+                    icon: "/icons/requiem_lohk.png".to_string(),
+                    thumb: None,
+                    sub_icon: None,
+                    description: Some("A Requiem mod used to defeat Kuva Liches".to_string()),
+                    wiki_link: Some("https://warframe.fandom.com/wiki/Requiem_Lohk".to_string()),
+                },
+            )]),
+            rarity: Some(Rarity::Rare),
+            vaulted: None,
+            ducats: None,
+            trading_tax: Some(8000),
+            mastery_rank: None,
+            max_rank: Some(0),
+            max_charges: Some(3),
+            max_amber_stars: None,
+            max_cyan_stars: None,
+            base_endo: None,
+            endo_multiplier: None,
+            set_root: None,
+            set_parts: None,
+            quantity_in_set: None,
+            bulk_tradable: None,
+            subtypes: None,
+        }
+    }
+
+    fn make_standard_mod() -> Item {
+        Item {
+            id: "serration-id".to_string(),
+            slug: "serration".to_string(),
+            game_ref: Some("/Lotus/Upgrades/Mods/Rifle/DamageRifleMod".to_string()),
+            tradable: Some(true),
+            tags: vec!["mod".to_string(), "rifle".to_string()],
+            i18n: HashMap::from([(
+                "en".to_string(),
+                ItemTranslation {
+                    name: "Serration".to_string(),
+                    icon: "/icons/serration.png".to_string(),
+                    thumb: None,
+                    sub_icon: None,
+                    description: Some("Increases rifle damage".to_string()),
+                    wiki_link: Some("https://warframe.fandom.com/wiki/Serration".to_string()),
+                },
+            )]),
+            rarity: Some(Rarity::Uncommon),
+            vaulted: None,
+            ducats: None,
+            trading_tax: Some(4000),
+            mastery_rank: None,
+            max_rank: Some(10),
+            max_charges: None,
+            max_amber_stars: None,
+            max_cyan_stars: None,
+            base_endo: None,
+            endo_multiplier: None,
+            set_root: None,
+            set_parts: None,
+            quantity_in_set: None,
+            bulk_tradable: None,
+            subtypes: None,
+        }
+    }
+
+    fn make_sah_sculpture() -> Item {
+        Item {
+            id: "ayatan-sah-id".to_string(),
+            slug: "ayatan_sah_sculpture".to_string(),
+            game_ref: Some("/Lotus/Types/Items/MiscItems/AyatanSahSculpture".to_string()),
+            tradable: Some(true),
+            tags: vec!["ayatan".to_string()],
+            i18n: HashMap::from([(
+                "en".to_string(),
+                ItemTranslation {
+                    name: "Ayatan Sah Sculpture".to_string(),
+                    icon: "/icons/ayatan_sah.png".to_string(),
+                    thumb: None,
+                    sub_icon: None,
+                    description: Some(
+                        "An Ayatan sculpture that can be traded for endo".to_string(),
+                    ),
+                    wiki_link: Some(
+                        "https://warframe.fandom.com/wiki/Ayatan_Sah_Sculpture".to_string(),
+                    ),
+                },
+            )]),
+            rarity: None,
+            vaulted: None,
+            ducats: None,
+            trading_tax: Some(4000),
+            mastery_rank: None,
+            max_rank: None,
+            max_charges: None,
+            max_amber_stars: Some(1),
+            max_cyan_stars: Some(2),
+            base_endo: Some(600),
+            endo_multiplier: Some(0.9),
+            set_root: None,
+            set_parts: None,
+            quantity_in_set: None,
+            bulk_tradable: None,
+            subtypes: None,
+        }
+    }
+
+    fn make_prime_part() -> Item {
+        Item {
+            id: "nikana-prime-blade-id".to_string(),
+            slug: "nikana_prime_blade".to_string(),
+            game_ref: Some("/Lotus/Types/Recipes/Weapons/NikanaPrimeBlade".to_string()),
+            tradable: Some(true),
+            tags: vec!["prime".to_string(), "melee".to_string()],
+            i18n: HashMap::from([(
+                "en".to_string(),
+                ItemTranslation {
+                    name: "Nikana Prime Blade".to_string(),
+                    icon: "/icons/nikana_prime_blade.png".to_string(),
+                    thumb: None,
+                    sub_icon: None,
+                    description: None,
+                    wiki_link: Some("https://warframe.fandom.com/wiki/Nikana_Prime".to_string()),
+                },
+            )]),
+            rarity: Some(Rarity::Uncommon),
+            vaulted: Some(false),
+            ducats: Some(45),
+            trading_tax: Some(4000),
+            mastery_rank: None,
+            max_rank: None,
+            max_charges: None,
+            max_amber_stars: None,
+            max_cyan_stars: None,
+            base_endo: None,
+            endo_multiplier: None,
+            set_root: None,
+            set_parts: None,
+            quantity_in_set: Some(1),
+            bulk_tradable: None,
+            subtypes: None,
+        }
+    }
+
+    fn make_blueprint() -> Item {
+        Item {
+            id: "ash-prime-blueprint-id".to_string(),
+            slug: "ash_prime_blueprint".to_string(),
+            game_ref: Some("/Lotus/Types/Recipes/Warframes/AshPrimeBlueprint".to_string()),
+            tradable: Some(true),
+            tags: vec!["prime".to_string(), "warframe".to_string()],
+            i18n: HashMap::from([(
+                "en".to_string(),
+                ItemTranslation {
+                    name: "Ash Prime Blueprint".to_string(),
+                    icon: "/icons/ash_prime_blueprint.png".to_string(),
+                    thumb: None,
+                    sub_icon: Some("/icons/blueprint_overlay.png".to_string()),
+                    description: None,
+                    wiki_link: Some("https://warframe.fandom.com/wiki/Ash_Prime".to_string()),
+                },
+            )]),
+            rarity: Some(Rarity::Rare),
+            vaulted: Some(true),
+            ducats: Some(100),
+            trading_tax: Some(8000),
+            mastery_rank: None,
+            max_rank: None,
+            max_charges: None,
+            max_amber_stars: None,
+            max_cyan_stars: None,
+            base_endo: None,
+            endo_multiplier: None,
+            set_root: None,
+            set_parts: None,
+            quantity_in_set: Some(1),
+            bulk_tradable: None,
+            subtypes: None,
+        }
+    }
+
+    // === Mod detection tests ===
+
+    #[test]
+    fn test_archon_mod_detection() {
+        let item = make_archon_mod();
+        assert!(item.is_mod(), "Archon Flow should be detected as a mod");
+        assert!(
+            !item.is_sculpture(),
+            "Archon Flow should not be a sculpture"
+        );
+        assert!(
+            !item.is_regular(),
+            "Archon Flow should not be a regular item"
+        );
+        assert!(!item.has_charges(), "Archon Flow should not have charges");
+
+        let mod_view = item
+            .as_mod()
+            .expect("Should return ModView for Archon Flow");
+        assert_eq!(mod_view.max_rank(), 5);
+    }
+
+    #[test]
+    fn test_requiem_mod_with_charges() {
+        let item = make_requiem_mod();
+        assert!(item.is_mod(), "Requiem Lohk should be detected as a mod");
+        assert!(item.has_charges(), "Requiem Lohk should have charges");
+        assert!(
+            !item.is_sculpture(),
+            "Requiem Lohk should not be a sculpture"
+        );
+        assert!(
+            !item.is_regular(),
+            "Requiem Lohk should not be a regular item"
+        );
+
+        let mod_view = item
+            .as_mod()
+            .expect("Should return ModView for Requiem Lohk");
+        assert_eq!(mod_view.max_rank(), 0);
+        assert_eq!(mod_view.max_charges(), Some(3));
+        assert!(mod_view.has_charges());
+    }
+
+    #[test]
+    fn test_standard_mod_detection() {
+        let item = make_standard_mod();
+        assert!(item.is_mod(), "Serration should be detected as a mod");
+        assert!(!item.is_sculpture(), "Serration should not be a sculpture");
+        assert!(!item.is_regular(), "Serration should not be a regular item");
+
+        let mod_view = item.as_mod().expect("Should return ModView for Serration");
+        assert_eq!(mod_view.max_rank(), 10);
+    }
+
+    // === Sculpture detection tests ===
+
+    #[test]
+    fn test_ayatan_sah_sculpture_detection() {
+        let item = make_sah_sculpture();
+        assert!(
+            item.is_sculpture(),
+            "Ayatan Sah should be detected as a sculpture"
+        );
+        assert!(!item.is_mod(), "Ayatan Sah should not be a mod");
+        assert!(
+            !item.is_regular(),
+            "Ayatan Sah should not be a regular item"
+        );
+
+        let sculpture = item
+            .as_sculpture()
+            .expect("Should return SculptureView for Ayatan Sah");
+        assert_eq!(sculpture.base_endo(), 600);
+        assert_eq!(sculpture.max_amber_stars(), 1);
+        assert_eq!(sculpture.max_cyan_stars(), 2);
+        assert_eq!(sculpture.total_slots(), 3);
+    }
+
+    #[test]
+    fn test_ayatan_anasa_sculpture_detection() {
+        let item = make_sculpture(); // Uses existing helper (Ayatan Anasa)
+        assert!(
+            item.is_sculpture(),
+            "Ayatan Anasa should be detected as a sculpture"
+        );
+        assert!(!item.is_mod(), "Ayatan Anasa should not be a mod");
+        assert!(
+            !item.is_regular(),
+            "Ayatan Anasa should not be a regular item"
+        );
+
+        let sculpture = item
+            .as_sculpture()
+            .expect("Should return SculptureView for Ayatan Anasa");
+        assert_eq!(sculpture.base_endo(), 450);
+        assert_eq!(sculpture.max_amber_stars(), 2);
+        assert_eq!(sculpture.max_cyan_stars(), 4);
+    }
+
+    // === Regular item detection tests ===
+
+    #[test]
+    fn test_prime_part_is_regular() {
+        let item = make_prime_part();
+        assert!(
+            item.is_regular(),
+            "Nikana Prime Blade should be a regular item"
+        );
+        assert!(!item.is_mod(), "Nikana Prime Blade should not be a mod");
+        assert!(
+            !item.is_sculpture(),
+            "Nikana Prime Blade should not be a sculpture"
+        );
+        assert!(item.as_mod().is_none());
+        assert!(item.as_sculpture().is_none());
+    }
+
+    #[test]
+    fn test_blueprint_is_regular() {
+        let item = make_blueprint();
+        assert!(
+            item.is_regular(),
+            "Ash Prime Blueprint should be a regular item"
+        );
+        assert!(!item.is_mod(), "Ash Prime Blueprint should not be a mod");
+        assert!(
+            !item.is_sculpture(),
+            "Ash Prime Blueprint should not be a sculpture"
+        );
+        assert!(item.as_mod().is_none());
+        assert!(item.as_sculpture().is_none());
+    }
+
+    // === Mutual exclusivity test ===
+
+    #[test]
+    fn test_item_type_mutual_exclusivity() {
+        // Collect all test items
+        let items: Vec<(&str, Item)> = vec![
+            ("Archon Flow (mod)", make_archon_mod()),
+            ("Requiem Lohk (mod)", make_requiem_mod()),
+            ("Serration (mod)", make_standard_mod()),
+            ("Ayatan Sah (sculpture)", make_sah_sculpture()),
+            ("Ayatan Anasa (sculpture)", make_sculpture()),
+            ("Nikana Prime Blade (regular)", make_prime_part()),
+            ("Ash Prime Blueprint (regular)", make_blueprint()),
+        ];
+
+        for (name, item) in items {
+            let type_flags = [item.is_mod(), item.is_sculpture(), item.is_regular()];
+            let true_count = type_flags.iter().filter(|&&x| x).count();
+
+            assert_eq!(
+                true_count,
+                1,
+                "{} should be exactly one type, but got: is_mod={}, is_sculpture={}, is_regular={}",
+                name,
+                item.is_mod(),
+                item.is_sculpture(),
+                item.is_regular()
+            );
+        }
     }
 }
 

@@ -22,17 +22,19 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> wf_market::Result<()> {
-//!     // Create an unauthenticated client for public data
-//!     let client = Client::builder().build()?;
+//!     // Create a client (fetches items automatically)
+//!     let client = Client::builder().build().await?;
 //!     
-//!     // Fetch items
-//!     let items = client.fetch_items().await?;
-//!     println!("Found {} items", items.len());
+//!     // Items are pre-loaded and accessible via client.items()
+//!     println!("Loaded {} items", client.items().len());
 //!     
 //!     // Get orders for an item
 //!     let orders = client.get_orders("nikana_prime_set").await?;
 //!     for order in orders.iter().take(5) {
-//!         println!("{}: {}p", order.user.ingame_name, order.platinum);
+//!         // Item info is automatically available on orders
+//!         if let Some(item) = order.get_item() {
+//!             println!("{}: {} @ {}p", order.user.ingame_name, item.name(), order.platinum);
+//!         }
 //!     }
 //!     
 //!     // Login for authenticated operations
@@ -84,27 +86,30 @@
 //!
 //! ## Caching
 //!
-//! Use the [`ApiCache`] for endpoints that rarely change:
+//! Use the [`ApiCache`] to persist items across application restarts:
 //!
 //! ```ignore
-//! use wf_market::{Client, ApiCache};
-//! use std::time::Duration;
+//! use wf_market::{Client, ApiCache, SerializableCache};
 //!
 //! async fn example() -> wf_market::Result<()> {
-//!     let client = Client::builder().build()?;
-//!     let mut cache = ApiCache::new();
+//!     // Load cache from disk (or create new)
+//!     let mut cache = match std::fs::read_to_string("cache.json") {
+//!         Ok(json) => serde_json::from_str::<SerializableCache>(&json)?
+//!             .into_api_cache(),
+//!         Err(_) => ApiCache::new(),
+//!     };
 //!     
-//!     // First call fetches from API
-//!     let items = client.get_items(Some(&mut cache)).await?;
+//!     // Build client using cache (uses cached items if < 1 day old)
+//!     let client = Client::builder()
+//!         .build_with_cache(&mut cache)
+//!         .await?;
 //!     
-//!     // Subsequent calls use cache
-//!     let items = client.get_items(Some(&mut cache)).await?;
+//!     // Items are loaded from cache or API
+//!     println!("Loaded {} items", client.items().len());
 //!     
-//!     // With TTL - refresh if older than 24 hours
-//!     let items = client.get_items_with_ttl(
-//!         Some(&mut cache),
-//!         Duration::from_secs(24 * 60 * 60),
-//!     ).await?;
+//!     // Save cache for next time
+//!     let serializable = SerializableCache::from(&cache);
+//!     std::fs::write("cache.json", serde_json::to_string(&serializable)?)?;
 //!     
 //!     Ok(())
 //! }
@@ -187,6 +192,7 @@ pub use models::{
     FullUser,
     // Items
     Item,
+    ItemIndex,
     ItemSet,
     ItemTranslation,
     Language,

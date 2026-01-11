@@ -136,6 +136,27 @@ impl ApiCache {
         self.rivens = None;
     }
 
+    /// Check if the cache has fresh items (younger than max_age).
+    ///
+    /// Returns `true` if items are cached and their age is less than `max_age`.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use std::time::Duration;
+    ///
+    /// let cache = ApiCache::new();
+    /// // No items yet
+    /// assert!(!cache.has_fresh_items(Duration::from_secs(3600)));
+    ///
+    /// // After setting items
+    /// cache.set_items(items);
+    /// assert!(cache.has_fresh_items(Duration::from_secs(3600)));
+    /// ```
+    pub fn has_fresh_items(&self, max_age: Duration) -> bool {
+        self.items_age().is_some_and(|age| age < max_age)
+    }
+
     /// Invalidate items cache if older than the given duration.
     ///
     /// Returns `true` if the cache was invalidated.

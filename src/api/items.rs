@@ -1,12 +1,13 @@
 //! Items API endpoints.
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use crate::cache::ApiCache;
 use crate::client::{AuthState, Client};
 use crate::error::{ApiErrorResponse, Error, Result};
 use crate::internal::BASE_URL;
-use crate::models::{Item, ItemSet};
+use crate::models::{Item, ItemIndex, ItemSet};
 
 use super::ApiResponse;
 
@@ -24,11 +25,12 @@ impl<S: AuthState> Client<S> {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```ignore
     /// use wf_market::Client;
     ///
     /// async fn example() -> wf_market::Result<()> {
-    ///     let client = Client::builder().build()?;
+    ///     let client = Client::builder().build().await?;
+    ///     // Items are already loaded, but you can fetch fresh ones:
     ///     let items = client.fetch_items().await?;
     ///     println!("Found {} items", items.len());
     ///     Ok(())
@@ -81,11 +83,11 @@ impl<S: AuthState> Client<S> {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```ignore
     /// use wf_market::{Client, ApiCache};
     ///
     /// async fn example() -> wf_market::Result<()> {
-    ///     let client = Client::builder().build()?;
+    ///     let client = Client::builder().build().await?;
     ///     let mut cache = ApiCache::new();
     ///
     ///     // First call fetches from API
@@ -122,12 +124,12 @@ impl<S: AuthState> Client<S> {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```ignore
     /// use wf_market::{Client, ApiCache};
     /// use std::time::Duration;
     ///
     /// async fn example() -> wf_market::Result<()> {
-    ///     let client = Client::builder().build()?;
+    ///     let client = Client::builder().build().await?;
     ///     let mut cache = ApiCache::new();
     ///
     ///     // Refresh if cache is older than 24 hours
@@ -156,11 +158,11 @@ impl<S: AuthState> Client<S> {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```ignore
     /// use wf_market::Client;
     ///
     /// async fn example() -> wf_market::Result<()> {
-    ///     let client = Client::builder().build()?;
+    ///     let client = Client::builder().build().await?;
     ///     let item = client.get_item("nikana_prime_set").await?;
     ///     println!("Item: {}", item.name());
     ///     Ok(())
@@ -214,11 +216,11 @@ impl<S: AuthState> Client<S> {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```ignore
     /// use wf_market::Client;
     ///
     /// async fn example() -> wf_market::Result<()> {
-    ///     let client = Client::builder().build()?;
+    ///     let client = Client::builder().build().await?;
     ///     let set = client.get_item_set("nikana_prime_set").await?;
     ///
     ///     println!("Set contains {} items:", set.len());
@@ -272,5 +274,38 @@ impl<S: AuthState> Client<S> {
             serde_json::from_str(&body).map_err(|e| Error::parse_with_body(e.to_string(), body))?;
 
         Ok(api_response.data)
+    }
+
+    /// Refresh the client's item index with fresh data from the API.
+    ///
+    /// This fetches the latest item list and rebuilds the item index.
+    /// Use this if you suspect the item list has changed (e.g., after
+    /// a game update) or if item lookups are returning `None` unexpectedly.
+    ///
+    /// Note: Items are automatically loaded when the client is created,
+    /// and the list rarely changes. You typically don't need to call this
+    /// unless your application runs for extended periods.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use wf_market::Client;
+    ///
+    /// async fn example() -> wf_market::Result<()> {
+    ///     let mut client = Client::builder().build().await?;
+    ///
+    ///     // ... application runs for a long time ...
+    ///
+    ///     // Refresh items if needed
+    ///     client.revalidate_items().await?;
+    ///
+    ///     println!("Refreshed {} items", client.items().len());
+    ///     Ok(())
+    /// }
+    /// ```
+    pub async fn revalidate_items(&mut self) -> Result<()> {
+        let items = self.fetch_items().await?;
+        self.items = Arc::new(ItemIndex::new(items));
+        Ok(())
     }
 }

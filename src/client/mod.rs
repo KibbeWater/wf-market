@@ -43,7 +43,7 @@ use std::sync::Arc;
 
 use crate::error::{Error, Result};
 use crate::internal::ApiRateLimiter;
-use crate::models::{Credentials, Language, Platform};
+use crate::models::{Credentials, Item, ItemIndex, Language, Platform};
 
 // Sealed trait pattern for auth states
 mod private {
@@ -102,6 +102,7 @@ pub struct Client<S: AuthState = Unauthenticated> {
     pub(crate) config: ClientConfig,
     pub(crate) limiter: Arc<ApiRateLimiter>,
     pub(crate) credentials: Option<Credentials>,
+    pub(crate) items: Arc<ItemIndex>,
     pub(crate) _state: PhantomData<S>,
 }
 
@@ -147,7 +148,7 @@ impl Client<Unauthenticated> {
     /// }
     /// ```
     pub async fn from_credentials(credentials: Credentials) -> Result<Client<Authenticated>> {
-        Self::builder().build()?.login(credentials).await
+        Self::builder().build().await?.login(credentials).await
     }
 
     /// Create a client with custom config and login in one step.
@@ -173,7 +174,8 @@ impl Client<Unauthenticated> {
     ) -> Result<Client<Authenticated>> {
         Self::builder()
             .config(config)
-            .build()?
+            .build()
+            .await?
             .login(credentials)
             .await
     }
@@ -228,12 +230,14 @@ impl Client<Unauthenticated> {
         http: reqwest::Client,
         config: ClientConfig,
         limiter: Arc<ApiRateLimiter>,
+        items: Arc<ItemIndex>,
     ) -> Self {
         Self {
             http,
             config,
             limiter,
             credentials: None,
+            items,
             _state: PhantomData,
         }
     }
@@ -253,6 +257,51 @@ impl<S: AuthState> Client<S> {
     /// Get the language this client is configured for.
     pub fn language(&self) -> Language {
         self.config.language
+    }
+
+    /// Get the item index.
+    ///
+    /// The item index provides O(1) lookups for items by ID or slug.
+    /// It is automatically populated when the client is constructed.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let client = Client::builder().build().await?;
+    ///
+    /// // Iterate over all items
+    /// for item in client.items().iter() {
+    ///     println!("{}: {}", item.slug, item.name());
+    /// }
+    ///
+    /// // Lookup by slug
+    /// if let Some(item) = client.items().get_by_slug("serration") {
+    ///     println!("Found: {}", item.name());
+    /// }
+    /// ```
+    pub fn items(&self) -> &ItemIndex {
+        &self.items
+    }
+
+    /// Get an item by its unique ID.
+    ///
+    /// This is a convenience method equivalent to `client.items().get_by_id(id)`.
+    pub fn get_item_by_id(&self, id: &str) -> Option<&Item> {
+        self.items.get_by_id(id)
+    }
+
+    /// Get an item by its URL-friendly slug.
+    ///
+    /// This is a convenience method equivalent to `client.items().get_by_slug(slug)`.
+    pub fn get_item_by_slug(&self, slug: &str) -> Option<&Item> {
+        self.items.get_by_slug(slug)
+    }
+
+    /// Get a shared reference to the item index.
+    ///
+    /// This is useful for passing to functions that need the index.
+    pub(crate) fn items_arc(&self) -> Arc<ItemIndex> {
+        Arc::clone(&self.items)
     }
 
     /// Wait for rate limiter before making a request.
@@ -322,12 +371,14 @@ impl Client<Authenticated> {
         config: ClientConfig,
         limiter: Arc<ApiRateLimiter>,
         credentials: Credentials,
+        items: Arc<ItemIndex>,
     ) -> Self {
         Self {
             http,
             config,
             limiter,
             credentials: Some(credentials),
+            items,
             _state: PhantomData,
         }
     }
@@ -341,6 +392,7 @@ impl Clone for Client<Unauthenticated> {
             config: self.config.clone(),
             limiter: self.limiter.clone(),
             credentials: None,
+            items: self.items.clone(),
             _state: PhantomData,
         }
     }
@@ -353,6 +405,7 @@ impl Clone for Client<Authenticated> {
             config: self.config.clone(),
             limiter: self.limiter.clone(),
             credentials: self.credentials.clone(),
+            items: self.items.clone(),
             _state: PhantomData,
         }
     }
