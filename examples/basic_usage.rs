@@ -76,6 +76,13 @@ async fn main() -> wf_market::Result<()> {
     println!("  let client = Client::builder().build_with_cache(&mut cache).await?;");
     println!("  // Cache is used if items are < 1 day old");
 
+    // Demonstrate standalone item fetching
+    println!("\n=== Standalone Item Fetching ===");
+    println!("You can fetch items without a client using ItemIndex::fetch():");
+    println!("  let index = ItemIndex::fetch().await?;");
+    println!("  let client = Client::builder().build_with_items(index);");
+    println!("This is useful for pre-loading items or sync client construction.");
+
     println!("\nDone!");
     Ok(())
 }

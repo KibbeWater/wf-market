@@ -196,6 +196,28 @@ for order in &orders {
 }
 ```
 
+### Standalone Item Fetching
+
+Fetch items without creating a client using `ItemIndex::fetch()`. This is useful for pre-loading items or building a client synchronously:
+
+```rust
+use wf_market::{Client, ItemIndex, Platform, Language};
+
+// Fetch items independently (no client needed)
+let index = ItemIndex::fetch().await?;
+println!("Fetched {} items", index.len());
+
+// Build client synchronously with pre-fetched items
+let client = Client::builder().build_with_items(index);
+
+// With custom platform/language settings
+let index = ItemIndex::fetch_with_config(
+    Platform::Playstation,
+    Language::German,
+    false, // crossplay
+).await?;
+```
+
 ### Caching Items
 
 For applications that restart frequently, use `build_with_cache()` to avoid re-fetching items:

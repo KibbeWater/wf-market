@@ -6,6 +6,10 @@
 
 use std::collections::HashMap;
 
+use crate::error::Result;
+use crate::internal::http::{build_http_client, fetch_items_internal};
+use crate::models::{Language, Platform};
+
 use super::Item;
 
 /// An indexed collection of items for efficient lookups.
@@ -14,7 +18,22 @@ use super::Item;
 /// by item ID or slug. This is used internally by the client to enable
 /// `order.get_item()` without requiring additional parameters.
 ///
-/// # Example
+/// # Fetching Without a Client
+///
+/// You can fetch items and build an index without creating a client first:
+///
+/// ```ignore
+/// use wf_market::{Client, ItemIndex};
+///
+/// // Fetch items independently (no client needed)
+/// let index = ItemIndex::fetch().await?;
+/// println!("Fetched {} items", index.len());
+///
+/// // Build client synchronously with pre-fetched items
+/// let client = Client::builder().build_with_items(index);
+/// ```
+///
+/// # Building from Existing Items
 ///
 /// ```ignore
 /// use wf_market::ItemIndex;
@@ -40,6 +59,67 @@ pub struct ItemIndex {
 }
 
 impl ItemIndex {
+    /// Fetch items from the API and build an index.
+    ///
+    /// This is a standalone method that doesn't require a [`Client`](crate::Client).
+    /// Useful for pre-fetching items before building a client with
+    /// [`build_with_items`](crate::ClientBuilder::build_with_items).
+    ///
+    /// Uses default settings (PC platform, English language, crossplay enabled).
+    /// For custom settings, use [`fetch_with_config`](Self::fetch_with_config).
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use wf_market::{Client, ItemIndex};
+    ///
+    /// // Fetch items independently
+    /// let index = ItemIndex::fetch().await?;
+    /// println!("Fetched {} items", index.len());
+    ///
+    /// // Build client synchronously with pre-fetched items
+    /// let client = Client::builder().build_with_items(index);
+    /// ```
+    pub async fn fetch() -> Result<Self> {
+        Self::fetch_with_config(Platform::Pc, Language::English, true).await
+    }
+
+    /// Fetch items from the API with custom configuration.
+    ///
+    /// This is a standalone method that doesn't require a [`Client`](crate::Client).
+    ///
+    /// # Arguments
+    ///
+    /// * `platform` - The gaming platform (PC, PlayStation, Xbox, Switch)
+    /// * `language` - The language for item names and descriptions
+    /// * `crossplay` - Whether to include crossplay data
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use wf_market::{Client, ItemIndex, Platform, Language};
+    ///
+    /// // Fetch items with custom settings
+    /// let index = ItemIndex::fetch_with_config(
+    ///     Platform::Playstation,
+    ///     Language::German,
+    ///     false,
+    /// ).await?;
+    ///
+    /// // Build client synchronously
+    /// let client = Client::builder().build_with_items(index);
+    /// ```
+    pub async fn fetch_with_config(
+        platform: Platform,
+        language: Language,
+        crossplay: bool,
+    ) -> Result<Self> {
+        let http = build_http_client(platform, language, crossplay)
+            .map_err(crate::error::Error::Network)?;
+        let items = fetch_items_internal(&http).await?;
+        Ok(Self::new(items))
+    }
+
     /// Create a new item index from a list of items.
     ///
     /// This builds the internal hash maps for O(1) lookups.
