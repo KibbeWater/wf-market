@@ -8,15 +8,13 @@ use wf_market::{Client, OrderType};
 
 #[tokio::main]
 async fn main() -> wf_market::Result<()> {
-    // Create an unauthenticated client
-    let client = Client::builder().build()?;
+    // Create an unauthenticated client (fetches items automatically)
+    let client = Client::builder().build().await?;
 
-    println!("=== Fetching all items ===");
-    let items = client.fetch_items().await?;
-    println!("Found {} tradeable items\n", items.len());
+    println!("=== Loaded {} items ===\n", client.items().len());
 
-    // Find a specific item by slug
-    let nikana = items.iter().find(|i| i.slug == "nikana_prime_set");
+    // Find a specific item by slug (O(1) lookup)
+    let nikana = client.get_item_by_slug("nikana_prime_set");
 
     if let Some(item) = nikana {
         println!("=== Item: {} ===", item.slug);
@@ -39,12 +37,27 @@ async fn main() -> wf_market::Result<()> {
 
         println!("\nTop 5 sell orders:");
         for order in sell_orders {
+            // Item info is automatically available via get_item()
+            let item_type = order
+                .get_item()
+                .map(|i| {
+                    if i.is_mod() {
+                        "mod"
+                    } else if i.is_sculpture() {
+                        "sculpture"
+                    } else {
+                        "item"
+                    }
+                })
+                .unwrap_or("unknown");
+
             println!(
-                "  {} - {}p x{} ({})",
+                "  {} - {}p x{} ({}) [{}]",
                 order.user.ingame_name,
                 order.order.platinum,
                 order.order.quantity,
-                order.user.status
+                order.user.status,
+                item_type
             );
         }
 
@@ -55,19 +68,13 @@ async fn main() -> wf_market::Result<()> {
         println!("Highest buy: {:?}p", top.buy.first().map(|o| o.platinum));
     }
 
-    // Demonstrate caching
+    // Demonstrate caching (items are already cached in client)
     println!("\n=== Using Cache ===");
-    let mut cache = wf_market::ApiCache::new();
-
-    // First call fetches from API
-    let start = std::time::Instant::now();
-    let _items = client.get_items(Some(&mut cache)).await?;
-    println!("First fetch: {:?}", start.elapsed());
-
-    // Second call uses cache (instant)
-    let start = std::time::Instant::now();
-    let _items = client.get_items(Some(&mut cache)).await?;
-    println!("Cached fetch: {:?}", start.elapsed());
+    println!("Items are automatically cached in the client.");
+    println!("Use build_with_cache() to persist across restarts:");
+    println!("  let mut cache = ApiCache::new();");
+    println!("  let client = Client::builder().build_with_cache(&mut cache).await?;");
+    println!("  // Cache is used if items are < 1 day old");
 
     println!("\nDone!");
     Ok(())

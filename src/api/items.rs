@@ -286,6 +286,20 @@ impl<S: AuthState> Client<S> {
     /// and the list rarely changes. You typically don't need to call this
     /// unless your application runs for extended periods.
     ///
+    /// # Stale References
+    ///
+    /// **Important**: Orders fetched before calling this method will
+    /// continue to reference the old item index due to `Arc` sharing.
+    /// To ensure all orders use the latest index, re-fetch orders after
+    /// calling this method.
+    ///
+    /// ```ignore
+    /// let orders = client.get_orders("serration").await?;  // Uses index v1
+    /// client.revalidate_items().await?;                     // Creates index v2
+    /// // `orders` still references index v1 internally
+    /// let fresh_orders = client.get_orders("serration").await?; // Uses index v2
+    /// ```
+    ///
     /// # Example
     ///
     /// ```ignore
