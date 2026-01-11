@@ -13,7 +13,7 @@ pub const BASE_URL: &str = "https://api.warframe.market/v2";
 pub const V1_API_URL: &str = "https://api.warframe.market/v1";
 
 /// Default user agent for API requests.
-pub const DEFAULT_USER_AGENT: &str = "wf-market-rs/0.3.0";
+pub const DEFAULT_USER_AGENT: &str = "wf-market-rs/0.3.1";
 
 /// Build default headers for API requests.
 pub fn build_default_headers(platform: Platform, language: Language, crossplay: bool) -> HeaderMap {

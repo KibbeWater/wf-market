@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-01-11
+
 ### Added
 
 - **V1 API Statistics Endpoint**: `get_item_statistics()` for historical price/volume data
@@ -15,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Includes closed trade data and live order data
   - Helper methods: `recent_avg_price()`, `has_sufficient_data()`, etc.
 - **New types**: `ItemStatistics`, `TimeframedStatistics`, `StatisticEntry`
+- **New feature flag**: `v1-api` for deprecated V1 API endpoints
 
 ## [0.3.0] - 2026-01-11
 
