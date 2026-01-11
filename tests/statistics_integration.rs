@@ -234,15 +234,15 @@ async fn test_max_rank_stats_filtering() {
     }
 }
 
-/// Test for_mod_rank with invalid rank returns error.
+/// Test stats_for_rank with invalid rank returns error.
 #[tokio::test]
 #[ignore]
-async fn test_for_mod_rank_invalid() {
+async fn test_stats_for_rank_invalid() {
     let client = Client::builder().build().await.unwrap();
     let stats = client.get_item_statistics("archon_flow").await.unwrap();
 
     // Try to get a rank that doesn't exist (e.g., rank 5 for a 0/10 mod)
-    let result = stats.for_mod_rank(5);
+    let result = stats.stats_for_rank(5);
 
     assert!(result.is_err(), "Should return error for invalid mod rank");
 }
