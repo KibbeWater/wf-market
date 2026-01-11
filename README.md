@@ -9,6 +9,7 @@ A Rust client library for the [warframe.market](https://warframe.market) API.
 ## Features
 
 - **Type-safe API** - Compile-time guarantees prevent common mistakes like updating orders you don't own
+- **Automatic item loading** - Items are fetched on client construction; orders have direct item access via `get_item()`
 - **Async/await** - Built on Tokio for efficient async operations
 - **Session persistence** - Save and restore login sessions with serde-compatible credentials
 - **Rate limiting** - Built-in rate limiter to prevent API throttling
@@ -34,17 +35,19 @@ use wf_market::{Client, Credentials, CreateOrder};
 
 #[tokio::main]
 async fn main() -> wf_market::Result<()> {
-    // Create an unauthenticated client for public data
-    let client = Client::builder().build()?;
+    // Create an unauthenticated client (fetches items automatically)
+    let client = Client::builder().build().await?;
     
-    // Fetch items
-    let items = client.fetch_items().await?;
-    println!("Found {} items", items.len());
+    // Items are already loaded - access them directly
+    println!("Loaded {} items", client.items().len());
     
     // Get orders for an item
     let orders = client.get_orders("nikana_prime_set").await?;
     for order in orders.iter().take(5) {
-        println!("{}: {}p", order.user.ingame_name, order.order.platinum);
+        // Orders have direct item access via get_item()
+        if let Some(item) = order.get_item() {
+            println!("{}: {}p for {}", order.user.ingame_name, order.order.platinum, item.name());
+        }
     }
     
     // Login for authenticated operations
@@ -73,7 +76,7 @@ async fn main() -> wf_market::Result<()> {
 use wf_market::{Client, Credentials};
 
 let creds = Credentials::new("email@example.com", "password", Credentials::generate_device_id());
-let client = Client::from_credentials(creds).await?;
+let client = Client::builder().build().await?.login(creds).await?;
 ```
 
 ### Session Persistence
@@ -93,7 +96,7 @@ let saved: Credentials = serde_json::from_str(&std::fs::read_to_string("session.
 
 // Validate before using (recommended)
 if Client::validate_credentials(&saved).await? {
-    let client = Client::from_credentials(saved).await?;
+    let client = Client::builder().build().await?.login(saved).await?;
 }
 ```
 
@@ -104,6 +107,13 @@ if Client::validate_credentials(&saved).await? {
 ```rust
 // Get orders with user info
 let orders = client.get_orders("nikana_prime_set").await?;
+
+// Orders have direct item access
+for order in &orders {
+    if let Some(item) = order.get_item() {
+        println!("{} - {}p by {}", item.name(), order.order.platinum, order.user.ingame_name);
+    }
+}
 
 // Get just order data (lighter response)
 let listings = client.get_listings("nikana_prime_set").await?;
@@ -154,9 +164,66 @@ let orders = client.get_orders("item").await?;
 // client.delete_order(&orders[0].order.id); // Error!
 ```
 
+## Item Index
+
+Items are automatically fetched when building a client. This enables O(1) item lookups and automatic item access from orders:
+
+```rust
+// Items loaded automatically on build()
+let client = Client::builder().build().await?;
+
+// Access items directly
+println!("Total items: {}", client.items().len());
+
+// O(1) lookups by ID or slug
+if let Some(item) = client.get_item_by_slug("serration") {
+    println!("Found: {}", item.name());
+    
+    // Check item type
+    if item.is_mod() {
+        println!("  Max rank: {}", item.as_mod().unwrap().max_rank());
+    } else if item.is_regular() {
+        println!("  Regular tradeable item");
+    }
+}
+
+// Orders have direct item access
+let orders = client.get_orders("nikana_prime_set").await?;
+for order in &orders {
+    if let Some(item) = order.get_item() {
+        println!("{}: {}p", item.name(), order.order.platinum);
+    }
+}
+```
+
+### Caching Items
+
+For applications that restart frequently, use `build_with_cache()` to avoid re-fetching items:
+
+```rust
+use wf_market::ApiCache;
+
+let mut cache = ApiCache::new();
+
+// First build fetches from API, subsequent builds use cache (if < 1 day old)
+let client = Client::builder().build_with_cache(&mut cache).await?;
+
+// Cache is serializable for persistence across restarts
+let json = serde_json::to_string(&cache.to_serializable())?;
+```
+
+### Long-Running Applications
+
+For long-running applications, refresh the item index periodically:
+
+```rust
+// Refresh items (new orders will use updated index)
+client.revalidate_items().await?;
+```
+
 ## Caching
 
-Use `ApiCache` for endpoints that rarely change:
+Use `ApiCache` for other endpoints that rarely change:
 
 ```rust
 use wf_market::ApiCache;
@@ -223,15 +290,30 @@ ws.set_status(WsUserStatus::Online, Some(3600), None).await?;
 
 ## Item Types
 
+Items can be categorized using type-checking methods:
+
+```rust
+let items = client.items();
+
+for item in items.iter() {
+    if item.is_mod() {
+        // Mods have max rank
+        let mod_view = item.as_mod().unwrap();
+        println!("{}: max rank {}", item.name(), mod_view.max_rank());
+    } else if item.is_sculpture() {
+        // Ayatan sculptures have endo values
+        let sculpture = item.as_sculpture().unwrap();
+        println!("{}: {} endo", item.name(), sculpture.calculate_endo(None, None));
+    } else if item.is_regular() {
+        // Regular items (not mods, not sculptures)
+        println!("{}: regular item", item.name());
+    }
+}
+```
+
 ### Mods
 
 ```rust
-for item in &items {
-    if let Some(mod_view) = item.as_mod() {
-        println!("{}: max rank {}", item.name(), mod_view.max_rank());
-    }
-}
-
 // Create mod order with rank
 let order = CreateOrder::sell("serration", 50, 1)
     .with_mod_rank(10);
@@ -240,11 +322,11 @@ let order = CreateOrder::sell("serration", 50, 1)
 ### Ayatan Sculptures
 
 ```rust
-for item in &items {
-    if let Some(sculpture) = item.as_sculpture() {
-        let full_endo = sculpture.calculate_endo(None, None);
-        println!("{}: {} endo (full)", item.name(), full_endo);
-    }
+if let Some(sculpture) = item.as_sculpture() {
+    // Calculate endo with custom star counts
+    let partial = sculpture.calculate_endo(Some(2), Some(1)); // 2 amber, 1 cyan
+    let full = sculpture.calculate_endo(None, None); // fully socketed
+    println!("{}: {} endo (partial) / {} endo (full)", item.name(), partial, full);
 }
 ```
 
@@ -262,7 +344,8 @@ let config = ClientConfig {
 
 let client = Client::builder()
     .config(config)
-    .build()?;
+    .build()
+    .await?;
 ```
 
 ## Feature Flags
