@@ -22,7 +22,7 @@
 //! use std::time::Duration;
 //!
 //! async fn example() -> wf_market::Result<()> {
-//!     let client = Client::builder().build()?;
+//!     let client = Client::builder().build().await?;
 //!     let mut cache = ApiCache::new();
 //!
 //!     // First call fetches from API and caches
