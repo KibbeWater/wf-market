@@ -35,4 +35,7 @@ pub use user::{
 
 // V1 API model re-exports (deprecated, feature-gated)
 #[cfg(feature = "v1-api")]
-pub use statistics::{ItemStatistics, StatisticEntry, TimeframedStatistics};
+pub use statistics::{
+    ItemStatistics, ItemStatisticsView, StatisticEntry, TimeframedStatistics,
+    TimeframedStatisticsView,
+};
