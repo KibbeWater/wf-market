@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Mod Rank Filtering for Statistics**: Filter statistics by mod rank for mod items
   - `ItemStatistics::is_mod_item()` - Check if statistics contain mod rank data
   - `ItemStatistics::available_mod_ranks()` - Get sorted list of available ranks
-  - `ItemStatistics::for_mod_rank(rank)` - Get zero-copy view filtered to specific rank
+  - `ItemStatistics::stats_for_rank(rank)` - Get zero-copy view filtered to specific rank
   - `ItemStatistics::max_rank_stats()` - Convenience method for highest rank stats
   - `ItemStatistics::unranked_stats()` - Convenience method for rank 0 stats
 - **New Types**: `ItemStatisticsView<'a>` and `TimeframedStatisticsView<'a>` for zero-copy filtered views
