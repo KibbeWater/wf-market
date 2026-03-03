@@ -241,6 +241,8 @@ where
                 })?;
                 let mut auction = serde_json::from_value::<Auction>(value.clone())
                     .map_err(|e| ApiError::ParsingError(err, e))?;
+
+                auction.item.attributes = args.item.attributes.clone();
                 auction.properties = args.properties; // Set properties if any
                 auction.apply_uuid();
 
