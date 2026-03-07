@@ -11,7 +11,9 @@ pub struct Order {
     pub id: String,
     #[serde(rename = "type")]
     pub order_type: OrderType,
+
     pub platinum: u32, // AKA the price
+
     pub quantity: u32,
 
     #[serde(rename = "perTrade", skip_serializing_if = "Option::is_none")]
@@ -27,10 +29,12 @@ pub struct Order {
 
     #[serde(rename = "createdAt")]
     pub created_at: String, // Timestamp of when the order was created
+
     #[serde(rename = "updatedAt")]
     pub updated_at: String, // Timestamp of when the order was last updated
 
-    pub properties: Option<serde_json::Value>, // Additional properties for the order
+    #[serde(default, flatten)]
+    pub properties: Properties, // Additional properties for the item
 }
 
 impl Default for Order {
@@ -46,17 +50,12 @@ impl Default for Order {
             item_id: String::new(),
             created_at: String::new(),
             updated_at: String::new(),
-            properties: None,
+            properties: Properties::default(),
         }
     }
 }
 
-impl Order {
-    pub fn set_properties(mut self, properties: serde_json::Value) -> Self {
-        self.properties = Some(properties);
-        self
-    }
-}
+impl Order {}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrderWithUser {

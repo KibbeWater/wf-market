@@ -264,9 +264,7 @@ where
         {
             Ok((existing_order, _, _)) => {
                 let mut order = existing_order.data;
-                if let Some(properties) = args.properties.clone() {
-                    order.properties = Some(properties);
-                }
+                order.properties.set_properties(args.properties.clone());
                 let mut ca_orders = self.orders.lock().unwrap();
                 ca_orders.update(order_id, args);
                 return Ok(order);
@@ -309,7 +307,7 @@ where
             Ok((new_order, _, _)) => {
                 let mut order = new_order.data;
                 let mut ca_orders = self.orders.lock().unwrap();
-                order.properties = args.properties; // Set properties if any
+                order.properties.set_properties(args.properties.clone());
                 ca_orders.add(order.clone());
                 return Ok(order);
             }

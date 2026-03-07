@@ -131,3 +131,6 @@ pub use auction_list::*;
 
 pub mod similarity;
 pub use similarity::*;
+
+pub mod properties;
+pub use properties::*;

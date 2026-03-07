@@ -26,57 +26,14 @@ pub struct Auction {
     pub item: AuctionItem,
     #[serde(default)]
     pub uuid: String,
-    pub properties: Option<serde_json::Value>, // Additional properties for the order
+    #[serde(default, flatten)]
+    pub properties: Properties, // Additional properties for the item
 }
 impl Auction {
     pub fn apply_uuid(&mut self) {
         if self.uuid.is_empty() {
             self.uuid = self.item.uuid().to_string();
         }
-    }
-    #[allow(dead_code)]
-    pub fn set_properties(&mut self, properties: Option<serde_json::Value>) {
-        self.properties = properties;
-    }
-    #[allow(dead_code)]
-    pub fn get_properties<T>(&self, default: T) -> T
-    where
-        T: Default + serde::de::DeserializeOwned,
-    {
-        if let Some(props) = &self.properties {
-            if let Ok(value) = serde_json::from_value(props.clone()) {
-                return value;
-            }
-        }
-        default
-    }
-    #[allow(dead_code)]
-    pub fn set_property_value<T>(&mut self, key: impl Into<String>, value: T)
-    where
-        T: serde::Serialize,
-    {
-        let key = key.into();
-        let value = serde_json::to_value(value).unwrap();
-        if let Some(props) = &mut self.properties {
-            props.as_object_mut().unwrap().insert(key, value);
-        } else {
-            let mut map = serde_json::Map::new();
-            map.insert(key, value);
-            self.properties = Some(serde_json::Value::Object(map));
-        }
-    }
-    #[allow(dead_code)]
-    pub fn get_property_value<T>(&self, key: impl Into<String>, default: T) -> T
-    where
-        T: Default + serde::de::DeserializeOwned,
-    {
-        let key = key.into();
-        if let Some(props) = &self.properties {
-            if let Some(value) = props.get(&key) {
-                return serde_json::from_value(value.clone()).unwrap();
-            }
-        }
-        default
     }
 }
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -126,7 +83,8 @@ pub struct AuctionItem {
     #[serde(default)]
     pub similarity: Similarity,
 
-    pub properties: Option<serde_json::Value>, // Additional properties for the order
+    #[serde(default, flatten)]
+    pub properties: Properties, // Additional properties for the item
 }
 impl AuctionItem {
     /// Generate a UUID based on all fields + attributes
@@ -213,52 +171,14 @@ impl AuctionItem {
         self.similarity = similarity.clone();
         similarity
     }
-    #[allow(dead_code)]
-    pub fn set_properties(&mut self, properties: serde_json::Value) {
-        self.properties = Some(properties);
-    }
-    #[allow(dead_code)]
-    pub fn set_property_value<T>(&mut self, key: impl Into<String>, value: T)
-    where
-        T: serde::Serialize,
-    {
-        let key = key.into();
-        let value = serde_json::to_value(value).unwrap();
-        if let Some(props) = &mut self.properties {
-            props.as_object_mut().unwrap().insert(key, value);
-        } else {
-            let mut map = serde_json::Map::new();
-            map.insert(key, value);
-            self.properties = Some(serde_json::Value::Object(map));
-        }
-    }
-    #[allow(dead_code)]
-    pub fn get_property_value<T>(&self, key: impl Into<String>, default: T) -> T
-    where
-        T: Default + serde::de::DeserializeOwned,
-    {
-        let key = key.into();
-        if let Some(props) = &self.properties {
-            if let Some(value) = props.get(&key) {
-                return serde_json::from_value(value.clone()).unwrap();
-            }
-        }
-        default
-    }
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ItemAttribute {
     pub url_name: String,
     pub positive: bool,
     pub value: f64,
-    #[serde(default = "unknown_effect")] // Is set by the user
-    pub localized_text: String,
-
-    pub properties: Option<serde_json::Value>, // Additional properties for the order
-}
-
-fn unknown_effect() -> String {
-    String::from("Unknown Effect")
+    #[serde(default, flatten)]
+    pub properties: Properties, // Additional properties for the attribute
 }
 
 impl ItemAttribute {
@@ -267,40 +187,20 @@ impl ItemAttribute {
             url_name: url_name.into(),
             positive,
             value,
-            localized_text: String::from("Unknown Effect"),
-            properties: None,
+            properties: Properties::default(),
         }
     }
-    pub fn set_localized_text(&mut self, text: impl Into<String>) -> Self {
-        self.localized_text = text.into();
-        self.clone()
-    }
-    #[allow(dead_code)]
-    pub fn set_property_value<T>(&mut self, key: impl Into<String>, value: T)
-    where
-        T: serde::Serialize,
-    {
-        let key = key.into();
-        let value = serde_json::to_value(value).unwrap();
-        if let Some(props) = &mut self.properties {
-            props.as_object_mut().unwrap().insert(key, value);
-        } else {
-            let mut map = serde_json::Map::new();
-            map.insert(key, value);
-            self.properties = Some(serde_json::Value::Object(map));
+    pub fn new_with_properties(
+        url_name: impl Into<String>,
+        positive: bool,
+        value: f64,
+        properties: serde_json::Value,
+    ) -> Self {
+        Self {
+            url_name: url_name.into(),
+            positive,
+            value,
+            properties: Properties::from(properties),
         }
-    }
-    #[allow(dead_code)]
-    pub fn get_property_value<T>(&self, key: impl Into<String>, default: T) -> T
-    where
-        T: Default + serde::de::DeserializeOwned,
-    {
-        let key = key.into();
-        if let Some(props) = &self.properties {
-            if let Some(value) = props.get(&key) {
-                return serde_json::from_value(value.clone()).unwrap();
-            }
-        }
-        default
     }
 }

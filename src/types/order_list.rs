@@ -63,7 +63,7 @@ impl OrderLike for Order {
             self.visible = visible;
         }
         if let Some(properties) = args.properties {
-            self.properties = Some(properties);
+            self.properties = Properties::from(properties);
         }
     }
 }

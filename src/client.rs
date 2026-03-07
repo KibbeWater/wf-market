@@ -189,7 +189,7 @@ impl<State: Clone + 'static> Client<State> {
         headers: Option<HashMap<String, String>>,
     ) -> Result<(T, HeaderMap, RequestError), ApiError> {
         let url = version.api_url().to_owned() + path;
-        println!("Calling API: {} {}", method, url);
+        let start = chrono::Utc::now();
         let mut default_headers = reqwest::header::HeaderMap::new();
         let key = key.into();
 
@@ -296,6 +296,14 @@ impl<State: Clone + 'static> Client<State> {
 
         match builder.send().await {
             Ok(resp) => {
+                let end = chrono::Utc::now();
+                error.duration_ms = Some((end - start).num_milliseconds() as u128);
+                println!(
+                    "API call to {} {} took ({})ms",
+                    url,
+                    error.method,
+                    error.duration_ms.unwrap_or(0)
+                );
                 let headers = resp.headers().clone();
                 let status = resp.status();
                 error.set_status_code(status.as_u16());
@@ -395,9 +403,11 @@ impl<State: Clone + 'static> Client<State> {
                 }
             }
             Err(e) => {
+                let end = chrono::Utc::now();
                 error.set_content(format!("Request failed: {}", e));
+                error.duration_ms = Some((end - start).num_milliseconds() as u128);
                 Err(ApiError::RequestError(error))
-            },
+            }
         }
     }
 
