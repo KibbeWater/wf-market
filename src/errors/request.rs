@@ -16,6 +16,7 @@ pub struct RequestError {
     pub content: String,
     pub retry_after: Option<u64>,
     pub wfm_error: Option<ResponseError>,
+    pub duration_ms: Option<u128>,
 }
 
 impl RequestError {
@@ -35,6 +36,7 @@ impl RequestError {
             headers: HashMap::new(), // Default empty headers
             content: String::new(),  // Default empty content
             wfm_error: None,         // Default no error
+            duration_ms: None,       // Default no duration
         }
     }
     pub fn set_status_code(&mut self, status_code: u16) {
@@ -141,6 +143,7 @@ impl Default for RequestError {
             headers: HashMap::new(),
             content: String::new(),
             wfm_error: None,
+            duration_ms: None,
         }
     }
 }
