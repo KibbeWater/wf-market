@@ -163,19 +163,23 @@ async fn my_orders() {
                     if let Some(order) = lowest_buy {
                         println!(
                             "   Lowest buy order: {} - {} platinum",
-                            order.item_id, order.platinum,
+                            order.item_id,
+                            order.per_trade.unwrap_or(0),
                         );
                     }
-                    // println!("✅ Successfully fetched my orders: {} total", orders.len());
-                    // for (i, order) in orders.iter().take(3).enumerate() {
-                    //     println!(
-                    //         "   Order {}: {} - {} platinum ({:?})",
-                    //         i + 1,
-                    //         order.id,
-                    //         order.platinum,
-                    //         order.order_type
-                    //     );
-                    // }
+                    println!(
+                        "✅ Successfully fetched my orders: {} total",
+                        orders.total_orders()
+                    );
+                    for (i, order) in orders.to_vec().iter().take(3).enumerate() {
+                        println!(
+                            "   Order {}: {} - {} platinum ({:?})",
+                            i + 1,
+                            order.id,
+                            order.platinum,
+                            order.order_type
+                        );
+                    }
                 }
                 Err(e) => {
                     eprintln!("💥 Failed to fetch my orders: {:?}", e);
@@ -229,7 +233,7 @@ async fn update_order() {
 
 #[tokio::test]
 async fn create_regular_order() {
-    let id = "653060f332327ba8746da745"; // Secura Dual Cestra Item ID
+    let id = "5c1bda1314a8e4006b1dad81"; // Secura Dual Cestra Item ID
 
     match setup_client().await {
         Ok(client) => {
@@ -237,12 +241,12 @@ async fn create_regular_order() {
                 .order()
                 .create(CreateOrderParams::new_with_subtype(
                     id,
-                    OrderType::Sell,
+                    OrderType::Buy,
                     10,
-                    5,
+                    11,
                     true,
-                    None,
-                    SubType::default(),
+                    Some(6),
+                    SubType::mods(5),
                 ))
                 .await
             {

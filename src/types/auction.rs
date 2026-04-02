@@ -171,6 +171,17 @@ impl AuctionItem {
         self.similarity = similarity.clone();
         similarity
     }
+
+    /// Convert attributes to raw format for easier processing in other parts of the code
+    /// Example usage: `auction_item.as_raw_attributes()` will return `Vec<(String, f64, bool)>` representing the attributes in raw format
+    pub fn as_raw_attributes(&self) -> Vec<(String, f64, bool)> {
+        self.attributes
+            .as_ref()
+            .unwrap_or(&vec![])
+            .iter()
+            .map(|att| att.to_raw())
+            .collect()
+    }
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ItemAttribute {
@@ -202,5 +213,17 @@ impl ItemAttribute {
             value,
             properties: Properties::from(properties),
         }
+    }
+    pub fn to_raw(&self) -> (String, f64, bool) {
+        (self.url_name.clone(), self.value, self.positive)
+    }
+}
+pub trait IntoRawVec {
+    fn into_raw(self) -> Vec<(String, f64, bool)>;
+}
+
+impl IntoRawVec for Vec<ItemAttribute> {
+    fn into_raw(self) -> Vec<(String, f64, bool)> {
+        self.into_iter().map(|att| att.to_raw()).collect()
     }
 }
