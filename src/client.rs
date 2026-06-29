@@ -227,7 +227,7 @@ impl<State: Clone + 'static> Client<State> {
 
         let prefix = match version {
             ApiVersion::V1 => "JWT",
-            ApiVersion::V2 => "Bearer",
+            ApiVersion::V2 | ApiVersion::Custom(_, _) => "Bearer",
         };
 
         // Add the required headers
@@ -362,6 +362,10 @@ impl<State: Clone + 'static> Client<State> {
                                 ResponseError::from_v1(error_body)
                             }
                             ApiVersion::V2 => match serde_json::from_str::<ResponseError>(&body) {
+                                Ok(api_result) => api_result,
+                                Err(e) => return Err(ApiError::ParsingError(error, e)),
+                            },
+                            _ => match serde_json::from_str::<ResponseError>(&body) {
                                 Ok(api_result) => api_result,
                                 Err(e) => return Err(ApiError::ParsingError(error, e)),
                             },
