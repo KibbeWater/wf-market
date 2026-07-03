@@ -408,7 +408,17 @@ impl<State: Clone + 'static> Client<State> {
             }
             Err(e) => {
                 let end = chrono::Utc::now();
-                error.set_content(format!("Request failed: {}", e));
+                let mut details = format!("Request failed: {}", e);
+                details.push_str(&format!("\n  URL: {}", url));
+                if e.is_timeout() {
+                    details.push_str("\n  Reason: timeout");
+                } else if e.is_connect() {
+                    details.push_str("\n  Reason: connection error");
+                }
+                if let Some(status) = e.status() {
+                    details.push_str(&format!("\n  HTTP status: {}", status));
+                }
+                error.set_content(details);
                 error.duration_ms = Some((end - start).num_milliseconds() as u128);
                 Err(ApiError::RequestError(error))
             }

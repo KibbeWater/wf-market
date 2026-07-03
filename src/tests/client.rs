@@ -8,7 +8,7 @@ use governor::{
 };
 use std::num::NonZeroU32;
 
-use crate::{Client, errors::ApiError};
+use crate::{Client, enums::ApiVersion, errors::ApiError};
 
 #[tokio::test]
 async fn print_token() {
@@ -154,4 +154,54 @@ async fn test_rate_limiter_async() {
 
     // Should have waited ~500ms (given 2 req/sec)
     assert!(elapsed >= std::time::Duration::from_millis(450));
+}
+
+#[tokio::test]
+async fn test_transport_error_details() {
+    let client = Client::new();
+    let custom_version = ApiVersion::Custom(
+        "http://127.0.0.1:1".into(),
+        "ws://127.0.0.1:1".into(),
+    );
+
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        client.call_api::<serde_json::Value>(
+            custom_version,
+            reqwest::Method::GET,
+            "/test_transport_error",
+            "test_transport_error",
+            None,
+            None,
+        ),
+    )
+    .await;
+
+    match result {
+        Ok(Err(ApiError::RequestError(error))) => {
+            println!("Transport error content:\n{}", error.content);
+            // Must have a reason classification (connection error, timeout, etc.)
+            assert!(
+                error.content.contains("Reason: connection error")
+                    || error.content.contains("Reason: timeout"),
+                "Expected reason classification in error content, got:\n{}",
+                error.content
+            );
+            // Should contain the path we tried
+            assert!(
+                error.content.contains("/test_transport_error")
+                    || error.content.contains("127.0.0.1:1"),
+                "Expected path or URL in error content, got:\n{}",
+                error.content
+            );
+            assert!(
+                error.content.len() > 30,
+                "Error content was too short: {}",
+                error.content
+            );
+        }
+        Ok(Ok(_)) => panic!("Expected transport error but got success"),
+        Ok(Err(other)) => panic!("Expected RequestError, got: {:?}", other),
+        Err(_) => panic!("Test timed out waiting for transport error"),
+    }
 }
