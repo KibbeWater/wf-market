@@ -4,7 +4,6 @@ use reqwest::Method;
 
 use crate::{client::Client, enums::*, errors::*, types::*};
 
-#[derive(Debug)]
 pub struct RivenRoute<State> {
     rivens_cache: Mutex<Option<Vec<Riven>>>,
     attributes_cache: Mutex<Option<Vec<RivenAttribute>>>,

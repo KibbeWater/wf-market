@@ -4,7 +4,6 @@ use reqwest::Method;
 
 use crate::{client::Client, enums::*, errors::*, types::*};
 
-#[derive(Debug)]
 pub struct SisterRoute<State> {
     ephemeras_cache: Mutex<Option<Vec<SisterEphemera>>>,
     quirks_cache: Mutex<Option<Vec<SisterQuirk>>>,

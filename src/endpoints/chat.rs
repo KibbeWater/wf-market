@@ -6,7 +6,6 @@ use serde_json::Value;
 
 use crate::{IsAuthenticated, client::Client, enums::*, errors::*, types::*};
 
-#[derive(Debug)]
 pub struct ChatRoute<State> {
     chats_cache: Mutex<ChatList>,
     client: Weak<Client<State>>,

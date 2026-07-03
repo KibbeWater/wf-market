@@ -4,7 +4,6 @@ use reqwest::Method;
 
 use crate::{client::Client, enums::*, errors::*, types::*};
 
-#[derive(Debug)]
 pub struct ManifestRoute<State> {
     versions_cache: Mutex<Option<VersionsResponse>>,
     locations_cache: Mutex<Option<Vec<Location>>>,

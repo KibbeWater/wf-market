@@ -4,7 +4,6 @@ use reqwest::Method;
 
 use crate::{client::Client, enums::*, errors::*, types::*};
 
-#[derive(Debug)]
 pub struct LichRoute<State> {
     ephemeras_cache: Mutex<Option<Vec<LichEphemera>>>,
     quirks_cache: Mutex<Option<Vec<LichQuirk>>>,

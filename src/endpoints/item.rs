@@ -4,7 +4,6 @@ use reqwest::Method;
 
 use crate::{client::Client, enums::*, errors::*, types::*};
 
-#[derive(Debug)]
 pub struct ItemRoute<State> {
     items_cache: Mutex<Option<Vec<Item>>>,
     client: Weak<Client<State>>,

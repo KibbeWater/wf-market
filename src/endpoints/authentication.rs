@@ -14,7 +14,6 @@ use crate::{
     types::*,
 };
 
-#[derive(Debug)]
 pub struct AuthenticationRoute<State> {
     client: Weak<Client<State>>,
 }

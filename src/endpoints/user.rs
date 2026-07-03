@@ -10,7 +10,6 @@ use crate::{
     types::*,
 };
 
-#[derive(Debug)]
 pub struct UserRoute<State> {
     user: Mutex<Option<UserPrivate>>,
     client: Weak<Client<State>>,

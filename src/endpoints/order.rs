@@ -10,7 +10,6 @@ use crate::{
     types::*,
 };
 
-#[derive(Debug)]
 pub struct OrderRoute<State> {
     orders: Mutex<OrderList<Order>>,
     limit: Mutex<usize>,

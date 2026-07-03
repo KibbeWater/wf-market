@@ -2,7 +2,7 @@ use crate::{
     endpoints::*,
     enums::*,
     errors::*,
-    types::{UserPrivate, websocket::WsClientBuilder},
+    types::{Properties, UserPrivate, websocket::WsClientBuilder},
     utils::*,
 };
 use governor::{
@@ -14,7 +14,7 @@ use reqwest::{
     Method,
     header::{HeaderMap, HeaderName, HeaderValue, RETRY_AFTER},
 };
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::{
     collections::HashMap,
     marker::PhantomData,
@@ -121,8 +121,10 @@ pub trait IsUnauthenticated {}
 
 impl IsAuthenticated for Authenticated {}
 impl IsUnauthenticated for Unauthenticated {}
+// Callback types
+pub type ClientCallback = Box<dyn Fn(&str, &Properties) + Send + Sync>;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Client<State = Unauthenticated> {
     self_arc: OnceLock<Arc<Client<State>>>,
     token: String,
@@ -133,6 +135,7 @@ pub struct Client<State = Unauthenticated> {
     limiter: Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>,
     per_route_limiter: Arc<Mutex<HashMap<String, RouteLimiter>>>,
     tracking: Arc<Mutex<HashMap<String, usize>>>,
+    callbacks: Arc<Mutex<HashMap<String, Vec<ClientCallback>>>>,
     // Routes
     manifest_route: OnceLock<Arc<ManifestRoute<State>>>,
     item_route: OnceLock<Arc<ItemRoute<State>>>,
@@ -147,6 +150,11 @@ pub struct Client<State = Unauthenticated> {
     chat_route: OnceLock<Arc<ChatRoute<State>>>,
     auction_route: OnceLock<Arc<AuctionRoute<State>>>,
     _state: PhantomData<State>,
+}
+impl<State> std::fmt::Debug for Client<State> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Client").finish()
+    }
 }
 impl<State: Clone + 'static> Client<State> {
     fn arc(&self) -> Arc<Self> {
@@ -173,10 +181,15 @@ impl<State: Clone + 'static> Client<State> {
                     limiter: self.limiter.clone(),
                     per_route_limiter: self.per_route_limiter.clone(),
                     tracking: self.tracking.clone(),
+                    callbacks: self.callbacks.clone(),
                     _state: PhantomData,
                 })
             })
             .clone()
+    }
+
+    fn emit_err(&self, error: &RequestError) {
+        self.emit("api:error", &Properties::from(serde_json::json!(error)));
     }
 
     pub async fn call_api<T: serde::de::DeserializeOwned>(
@@ -283,6 +296,7 @@ impl<State: Clone + 'static> Client<State> {
             .build()
             .unwrap();
 
+        let method_str = method.as_str().to_owned();
         let mut builder = http_client.request(method, &url);
         // If the client needs a body, serialize it
         if let Some(b) = body {
@@ -294,24 +308,41 @@ impl<State: Clone + 'static> Client<State> {
         }
         limiter.until_ready().await;
 
+        self.emit(
+            "api:before",
+            &Properties::from(serde_json::json!({
+                "key": key,
+                "url": url,
+                "method": method_str,
+            })),
+        );
+
         match builder.send().await {
             Ok(resp) => {
                 let end = chrono::Utc::now();
                 error.duration_ms = Some((end - start).num_milliseconds() as u128);
-                println!(
-                    "API call to {} {} took ({})ms",
-                    url,
-                    error.method,
-                    error.duration_ms.unwrap_or(0)
+                self.emit(
+                    "api:after",
+                    &Properties::from(serde_json::json!({
+                        "key": key,
+                        "status": resp.status().as_u16(),
+                        "url": url,
+                        "method": error.method,
+                        "duration_ms": error.duration_ms.unwrap_or(0),
+                    })),
                 );
                 let headers = resp.headers().clone();
                 let status = resp.status();
                 error.set_status_code(status.as_u16());
 
-                let body = resp.text().await.map_err(|e| {
-                    error.set_content(format!("Failed to read response body: {}", e));
-                    ApiError::RequestError(error.clone())
-                })?;
+                let body = match resp.text().await {
+                    Ok(b) => b,
+                    Err(e) => {
+                        error.set_content(format!("Failed to read response body: {}", e));
+                        self.emit_err(&error);
+                        return Err(ApiError::RequestError(error.clone()));
+                    }
+                };
                 // Log the error with the response body
                 error.set_content(body.clone());
 
@@ -319,6 +350,7 @@ impl<State: Clone + 'static> Client<State> {
                 match status {
                     reqwest::StatusCode::OK | reqwest::StatusCode::CREATED => {}
                     reqwest::StatusCode::UNAUTHORIZED => {
+                        self.emit_err(&error);
                         return Err(ApiError::Unauthorized(error));
                     }
                     reqwest::StatusCode::TOO_MANY_REQUESTS => {
@@ -333,7 +365,15 @@ impl<State: Clone + 'static> Client<State> {
                         } else {
                             quota_type = quota_type.downgrade();
                         };
-                        self.set_rate_limit_for_route(key, quota_type, retry_after as f64);
+                        self.set_rate_limit_for_route(key.clone(), quota_type, retry_after as f64);
+                        self.emit(
+                            "rate_limit:applied",
+                            &Properties::from(serde_json::json!({
+                                "key": key,
+                                "retry_after": retry_after,
+                            })),
+                        );
+                        self.emit_err(&error);
                         return Err(ApiError::TooManyRequests(error));
                     }
                     reqwest::StatusCode::INTERNAL_SERVER_ERROR
@@ -347,6 +387,7 @@ impl<State: Clone + 'static> Client<State> {
                     | reqwest::StatusCode::LOOP_DETECTED
                     | reqwest::StatusCode::NOT_EXTENDED
                     | reqwest::StatusCode::NETWORK_AUTHENTICATION_REQUIRED => {
+                        self.emit_err(&error);
                         return Err(ApiError::InternalServerError(error));
                     }
                     reqwest::StatusCode::BAD_REQUEST
@@ -357,40 +398,57 @@ impl<State: Clone + 'static> Client<State> {
                             ApiVersion::V1 => {
                                 let error_body = match serde_json::from_str::<Value>(&body) {
                                     Ok(v) => v,
-                                    Err(e) => return Err(ApiError::ParsingError(error, e)),
+                                    Err(e) => {
+                                        self.emit_err(&error);
+                                        return Err(ApiError::ParsingError(error, e));
+                                    }
                                 };
                                 ResponseError::from_v1(error_body)
                             }
                             ApiVersion::V2 => match serde_json::from_str::<ResponseError>(&body) {
                                 Ok(api_result) => api_result,
-                                Err(e) => return Err(ApiError::ParsingError(error, e)),
+                                Err(e) => {
+                                    self.emit_err(&error);
+                                    return Err(ApiError::ParsingError(error, e));
+                                }
                             },
                             _ => match serde_json::from_str::<ResponseError>(&body) {
                                 Ok(api_result) => api_result,
-                                Err(e) => return Err(ApiError::ParsingError(error, e)),
+                                Err(e) => {
+                                    self.emit_err(&error);
+                                    return Err(ApiError::ParsingError(error, e));
+                                }
                             },
                         };
                         // Set the error in the RequestError
                         error.set_error(Some(wfm_err.clone()));
                         if wfm_err.contains_error("app.order.error.exceededOrderLimitSamePrice") {
+                            self.emit_err(&error);
                             return Err(ApiError::OrderLimitExceededSamePrice(error));
                         } else if wfm_err.contains_error("app.order.error.exceededOrderLimit") {
+                            self.emit_err(&error);
                             return Err(ApiError::OrderLimitExceeded(error));
                         } else if wfm_err.contains_error("exceededAuctionLimit") {
+                            self.emit_err(&error);
                             return Err(ApiError::AuctionLimitExceeded(error));
                         } else if status == reqwest::StatusCode::FORBIDDEN {
+                            self.emit_err(&error);
                             return Err(ApiError::Forbidden(error));
                         } else if status == reqwest::StatusCode::NOT_FOUND {
+                            self.emit_err(&error);
                             return Err(ApiError::NotFound(error));
                         } else {
+                            self.emit_err(&error);
                             return Err(ApiError::BadRequest(error));
                         }
                     }
                     _ => match status.as_u16() {
                         500..=599 => {
+                            self.emit_err(&error);
                             return Err(ApiError::InternalServerError(error));
                         }
                         _ => {
+                            self.emit_err(&error);
                             return Err(ApiError::Unknown(format!(
                                 "Unexpected status code: {} with body: {}",
                                 status, body
@@ -403,7 +461,10 @@ impl<State: Clone + 'static> Client<State> {
 
                 match data {
                     Ok(data) => Ok((data, headers, error)),
-                    Err(e) => Err(ApiError::ParsingError(error, e)),
+                    Err(e) => {
+                        self.emit_err(&error);
+                        Err(ApiError::ParsingError(error, e))
+                    }
                 }
             }
             Err(e) => {
@@ -420,6 +481,7 @@ impl<State: Clone + 'static> Client<State> {
                 }
                 error.set_content(details);
                 error.duration_ms = Some((end - start).num_milliseconds() as u128);
+                self.emit_err(&error);
                 Err(ApiError::RequestError(error))
             }
         }
@@ -518,6 +580,63 @@ impl<State: Clone + 'static> Client<State> {
         }
     }
 
+    // ---------- Client Callback Methods ----------
+    /**
+     * Registers a callback for a specific event.
+     * # Arguments
+     * * `event` - A string representing the event name to listen for.
+     * * `callback` - A boxed closure that will be called when the event is triggered.
+     */
+    pub fn on<F>(&self, event: impl Into<String>, callback: F)
+    where
+        F: Fn(&str, &Properties) + Send + Sync + 'static,
+    {
+        let event = event.into();
+        let callback = Box::new(callback);
+
+        if let Ok(mut callbacks) = self.callbacks.lock() {
+            callbacks
+                .entry(event)
+                .or_insert_with(Vec::new)
+                .push(callback);
+        }
+    }
+
+    /**
+     * Triggers all callbacks registered for a specific event.
+     * # Arguments
+     * * `event` - A string representing the event name to trigger.
+     * * `data` - JSON value containing event data to pass to callbacks.
+     */
+    pub fn emit(&self, event: &str, data: &Properties) {
+        if let Ok(callbacks) = self.callbacks.lock() {
+            if let Some(event_callbacks) = callbacks.get(event) {
+                for callback in event_callbacks {
+                    callback(event, data);
+                }
+            }
+        }
+    }
+
+    /**
+     * Removes all callbacks for a specific event.
+     * # Arguments
+     * * `event` - A string representing the event name to clear callbacks for.
+     */
+    pub fn off(&self, event: &str) {
+        if let Ok(mut callbacks) = self.callbacks.lock() {
+            callbacks.remove(event);
+        }
+    }
+
+    /**
+     * Removes all callbacks for all events.
+     */
+    pub fn clear_callbacks(&self) {
+        if let Ok(mut callbacks) = self.callbacks.lock() {
+            callbacks.clear();
+        }
+    }
     // Endpoint methods to access routes
     pub fn manifest(&self) -> Arc<ManifestRoute<State>> {
         self.manifest_route
@@ -599,8 +718,24 @@ impl Client<Unauthenticated> {
             limiter: build_limiter(REQUESTS_PER_SECOND).into(),
             per_route_limiter: Arc::new(Mutex::new(HashMap::new())),
             tracking: Arc::new(Mutex::new(HashMap::new())),
+            callbacks: Arc::new(Mutex::new(HashMap::new())),
             _state: PhantomData,
         }
+    }
+
+    pub fn with_callback<F>(self, event: impl Into<String>, callback: F) -> Self
+    where
+        F: Fn(&str, &Properties) + Send + Sync + 'static,
+    {
+        let event = event.into();
+        let callback = Box::new(callback);
+        if let Ok(mut callbacks) = self.callbacks.lock() {
+            callbacks
+                .entry(event)
+                .or_insert_with(Vec::new)
+                .push(callback);
+        }
+        self
     }
 
     async fn create_authenticated_client(
@@ -630,6 +765,7 @@ impl Client<Unauthenticated> {
             limiter: self.limiter.clone(),
             per_route_limiter: self.per_route_limiter.clone(),
             tracking: self.tracking.clone(),
+            callbacks: self.callbacks.clone(),
             _state: PhantomData,
         };
         let arc = Arc::new(client);
@@ -854,14 +990,20 @@ impl Client<Authenticated> {
     If the data is successfully refreshed.
     */
     pub async fn refresh(&self) -> Result<String, ApiError> {
+        self.emit("api:refresh", &Properties::from(json!({"state": "user"})));
         let user = match self.user().me().await {
             Ok(user) => user,
             Err(e) => return Err(e),
         };
+        self.emit("api:refresh", &Properties::from(json!({"state": "orders"})));
         match self.order().my_orders().await {
             Ok(_) => {}
             Err(e) => return Err(e),
         }
+        self.emit(
+            "api:refresh",
+            &Properties::from(json!({"state": "auctions"})),
+        );
         match self.auction().my_auctions().await {
             Ok(_) => {}
             Err(e) => return Err(e),
@@ -875,6 +1017,7 @@ impl Client<Authenticated> {
             }
             None => return Err(ApiError::Unknown("User tier not found".to_string())),
         }
+        self.emit("api:refresh", &Properties::from(json!({"state": "chats"})));
         match self.chat().get_chats().await {
             Ok(_) => {}
             Err(e) => return Err(e),

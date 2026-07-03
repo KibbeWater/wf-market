@@ -114,6 +114,167 @@ async fn rate_limiting() {
     assert!(successful_requests + rate_limited_requests + other_errors == 50);
 }
 
+#[tokio::test]
+async fn test_api_events_fire() {
+    let client = Client::new();
+    let fired = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+
+    let f_before = fired.clone();
+    client.on("api:before", move |event, data| {
+        f_before.lock().unwrap().push(format!(
+            "{}:{}",
+            event,
+            data.get_property_value("key", String::new())
+        ));
+    });
+
+    let f_after = fired.clone();
+    client.on("api:after", move |event, data| {
+        f_after.lock().unwrap().push(format!(
+            "{}:{}",
+            event,
+            data.get_property_value("key", String::new())
+        ));
+    });
+
+    let f_error = fired.clone();
+    client.on("api:error", move |event, data| {
+        f_error.lock().unwrap().push(format!(
+            "{}:{}",
+            event,
+            data.get_property_value("key", String::new())
+        ));
+    });
+
+    let custom_version = ApiVersion::Custom("http://127.0.0.1:1".into(), "ws://127.0.0.1:1".into());
+
+    let _ = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        client.call_api::<serde_json::Value>(
+            custom_version,
+            reqwest::Method::GET,
+            "/test_api_events",
+            "test_api_events",
+            None,
+            None,
+        ),
+    )
+    .await;
+
+    let events = fired.lock().unwrap();
+    assert!(events.contains(&"api:before:test_api_events".to_string()));
+    assert!(events.contains(&"api:error:test_api_events".to_string()));
+    assert!(!events.contains(&"api:after:test_api_events".to_string()));
+    assert_eq!(
+        events.len(),
+        2,
+        "Expected exactly 2 events (before + error), got: {:?}",
+        *events
+    );
+}
+
+#[test]
+fn test_with_callback_builder() {
+    let fired = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+
+    let f1 = fired.clone();
+    let f2 = fired.clone();
+    let client = Client::new()
+        .with_callback("evt1", move |event, _| {
+            f1.lock().unwrap().push(format!("cb1:{}", event));
+        })
+        .with_callback("evt2", move |event, _| {
+            f2.lock().unwrap().push(format!("cb2:{}", event));
+        });
+
+    client.emit("evt1", &crate::types::Properties::default());
+    assert_eq!(fired.lock().unwrap().len(), 1);
+    assert!(fired.lock().unwrap().contains(&"cb1:evt1".to_string()));
+
+    fired.lock().unwrap().clear();
+    client.emit("evt2", &crate::types::Properties::default());
+    assert_eq!(fired.lock().unwrap().len(), 1);
+    assert!(fired.lock().unwrap().contains(&"cb2:evt2".to_string()));
+}
+
+#[tokio::test]
+async fn test_callbacks() {
+    let client = Client::new();
+    let fired = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+
+    // Register callbacks
+    let fired1 = fired.clone();
+    client.on("test:event", move |event, data| {
+        fired1.lock().unwrap().push(format!("cb1:{}", event));
+        let _ = data;
+    });
+
+    let fired2 = fired.clone();
+    client.on("test:event", move |event, data| {
+        fired2.lock().unwrap().push(format!("cb2:{}", event));
+        let _ = data;
+    });
+
+    let fired3 = fired.clone();
+    client.on("test:other", move |event, data| {
+        fired3.lock().unwrap().push(format!("cb3:{}", event));
+        let _ = data;
+    });
+
+    // Emit test:event - both cb1 and cb2 should fire
+    client.emit(
+        "test:event",
+        &crate::types::Properties {
+            properties: Some(serde_json::json!({"msg": "hello"})),
+        },
+    );
+    assert_eq!(fired.lock().unwrap().len(), 2);
+    assert!(
+        fired
+            .lock()
+            .unwrap()
+            .contains(&"cb1:test:event".to_string())
+    );
+    assert!(
+        fired
+            .lock()
+            .unwrap()
+            .contains(&"cb2:test:event".to_string())
+    );
+
+    // Emit test:other - only cb3 should fire
+    fired.lock().unwrap().clear();
+    client.emit("test:other", &crate::types::Properties { properties: None });
+    assert_eq!(fired.lock().unwrap().len(), 1);
+    assert!(
+        fired
+            .lock()
+            .unwrap()
+            .contains(&"cb3:test:other".to_string())
+    );
+
+    // Emit unregistered event - no callbacks should fire
+    fired.lock().unwrap().clear();
+    client.emit("test:nonexistent", &crate::types::Properties::default());
+    assert_eq!(fired.lock().unwrap().len(), 0);
+
+    // Remove test:event callbacks
+    fired.lock().unwrap().clear();
+    client.off("test:event");
+    client.emit("test:event", &crate::types::Properties::default());
+    assert_eq!(fired.lock().unwrap().len(), 0);
+
+    // test:other callback should still work
+    client.emit("test:other", &crate::types::Properties::default());
+    assert_eq!(fired.lock().unwrap().len(), 1);
+
+    // Clear all callbacks
+    fired.lock().unwrap().clear();
+    client.clear_callbacks();
+    client.emit("test:other", &crate::types::Properties::default());
+    assert_eq!(fired.lock().unwrap().len(), 0);
+}
+
 pub struct MyService {
     limiter: RateLimiter<NotKeyed, InMemoryState, DefaultClock>,
 }
@@ -159,10 +320,7 @@ async fn test_rate_limiter_async() {
 #[tokio::test]
 async fn test_transport_error_details() {
     let client = Client::new();
-    let custom_version = ApiVersion::Custom(
-        "http://127.0.0.1:1".into(),
-        "ws://127.0.0.1:1".into(),
-    );
+    let custom_version = ApiVersion::Custom("http://127.0.0.1:1".into(), "ws://127.0.0.1:1".into());
 
     let result = tokio::time::timeout(
         std::time::Duration::from_secs(5),

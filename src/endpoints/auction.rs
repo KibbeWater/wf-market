@@ -11,7 +11,6 @@ use crate::{
     types::*,
 };
 
-#[derive(Debug)]
 pub struct AuctionRoute<State> {
     auctions_cache: Mutex<AuctionList<Auction>>,
     limit: Mutex<usize>,

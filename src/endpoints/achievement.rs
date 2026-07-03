@@ -4,7 +4,6 @@ use reqwest::Method;
 
 use crate::{client::Client, enums::ApiVersion, errors::ApiError, types::*};
 
-#[derive(Debug)]
 pub struct AchievementRoute<State> {
     achievement_cache: Mutex<Option<Vec<Achievement>>>,
     client: Weak<Client<State>>,
