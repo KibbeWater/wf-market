@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::utils::mask_sensitive_data;
+
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, Default)]
 pub struct Properties {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -68,6 +70,13 @@ impl Properties {
         let mut value: T = self.get_property_value(&key, T::default());
         f(&mut value);
         self.set_property_value(key, value);
+    }
+    pub fn mask_sensitive_data(&mut self, properties: &[&str]) {
+        if let Some(props) = &mut self.properties {
+            if let Some(map) = props.as_object_mut() {
+                mask_sensitive_data(map, properties);
+            }
+        }
     }
 }
 
