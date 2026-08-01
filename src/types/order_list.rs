@@ -396,6 +396,29 @@ impl<State: OrderLike + Clone> OrderList<State> {
             .find(|o| o.to_order().id == order_id)
             .map(|o| o.to_order().clone())
     }
+    /*
+    Get a list of prices for a specific order type.
+    # Arguments
+    - order_type: OrderType: The type of order to get prices for (Sell or Buy).
+    # Returns
+    - Vec<i64>: A vector of prices for the specified order type.
+     */
+    pub fn get_price_list(
+        &self,
+        order_type: OrderType,
+        filter: Option<fn(&State) -> bool>,
+    ) -> Vec<i64> {
+        let orders = match order_type {
+            OrderType::Sell => &self.sell_orders,
+            OrderType::Buy => &self.buy_orders,
+        };
+        let filtered_orders = if let Some(filter_fn) = filter {
+            orders.iter().filter(|o| filter_fn(o)).collect::<Vec<_>>()
+        } else {
+            orders.iter().collect::<Vec<_>>()
+        };
+        filtered_orders.iter().map(|o| o.platinum()).collect()
+    }
 }
 
 impl OrderList<OrderWithUser> {
