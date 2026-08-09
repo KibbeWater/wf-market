@@ -31,7 +31,8 @@ impl OrderLike for Order {
     }
 
     fn platinum(&self) -> i64 {
-        self.platinum as i64
+        let per_trade = self.per_trade.unwrap_or(1);
+        ((self.platinum as i64) / per_trade as i64).into()
     }
 
     fn to_order(&self) -> Order {
@@ -75,7 +76,8 @@ impl OrderLike for OrderWithUser {
     }
 
     fn platinum(&self) -> i64 {
-        self.order.platinum as i64
+        let per_trade = self.order.per_trade.unwrap_or(1);
+        ((self.order.platinum as i64) / per_trade as i64).into()
     }
 
     fn to_order(&self) -> Order {
