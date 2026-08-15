@@ -190,6 +190,19 @@ impl<State: OrderLike + Clone> OrderList<State> {
         self.buy_orders.retain(|o| *o.sub_type() == sub_type);
     }
     /*
+    Filter orders based on a provided filter function.
+    # Arguments
+    - filter: F: A closure that takes a reference to a State and returns a boolean
+    indicating whether the order should be retained (true) or removed (false).
+    */
+    pub fn filter<F>(&mut self, filter: F)
+    where
+        F: Fn(&State) -> bool,
+    {
+        self.sell_orders.retain(|order| filter(order));
+        self.buy_orders.retain(|order| filter(order));
+    }
+    /*
     Get the lowest order of a specific type.
     # Arguments
     - order_type: OrderType: The type of order to get (Sell or Buy).
