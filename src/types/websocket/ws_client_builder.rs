@@ -21,15 +21,22 @@ pub struct WsClientBuilder {
     router: Router,
     token: String,
     device_id: String,
+    user_agent: Option<String>,
 }
 
 impl WsClientBuilder {
-    pub(crate) fn new(version: ApiVersion, token: String, device_id: String) -> Self {
+    pub(crate) fn new(
+        version: ApiVersion,
+        token: String,
+        device_id: String,
+        user_agent: Option<String>,
+    ) -> Self {
         Self {
             version,
             router: Router::new(false),
             token,
             device_id,
+            user_agent,
         }
     }
 
@@ -89,13 +96,20 @@ impl WsClientBuilder {
                         break;
                     }
                     let mut request = ws_url.into_client_request().unwrap();
-                    let headers = request.headers_mut();
-                    if version == &ApiVersion::V2 {
-                        headers.append("Sec-WebSocket-Protocol", "wfm".parse().unwrap());
-                    } else if version == &ApiVersion::V1 {
-                        headers.append("cookie", format!("JWT={}", self.token).parse().unwrap());
+                    {
+                        let headers = request.headers_mut();
+                        if version == &ApiVersion::V2 {
+                            headers.append("Sec-WebSocket-Protocol", "wfm".parse().unwrap());
+                        } else if version == &ApiVersion::V1 {
+                            headers
+                                .append("cookie", format!("JWT={}", self.token).parse().unwrap());
+                        }
+                        let user_agent = self
+                            .user_agent
+                            .clone()
+                            .unwrap_or_else(|| "wf-market-rs".to_string());
+                        headers.append("User-Agent", user_agent.parse().unwrap());
                     }
-                    headers.append("User-Agent", "wf-market-rs".parse().unwrap());
 
                     match connect_async(request).await {
                         Ok((ws_stream, _)) => {
@@ -248,7 +262,6 @@ impl WsClientBuilder {
                         }
 
                         Err(err) => {
-                            eprintln!("WebSocket connection failed: {}", err);
                             // Send connection failed message to the router
                             let failed_message = WsMessage::reconnect(
                                 retry_interval.as_secs(),

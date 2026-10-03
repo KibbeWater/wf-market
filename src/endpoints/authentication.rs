@@ -8,7 +8,7 @@ use serde::de::Error;
 use serde_json::Value;
 
 use crate::{
-    client::{Client, IsUnauthenticated},
+    client::Client,
     enums::ApiVersion,
     errors::ApiError,
     types::*,
@@ -45,7 +45,7 @@ impl<State> AuthenticationRoute<State> {
 
 impl<State> AuthenticationRoute<State>
 where
-    State: IsUnauthenticated + Clone + 'static,
+    State: Clone + 'static,
 {
     pub async fn signin(
         &self,

@@ -19,7 +19,7 @@ use std::{
     collections::HashMap,
     marker::PhantomData,
     num::{NonZero, NonZeroU32},
-    sync::{Arc, Mutex, OnceLock},
+    sync::{Arc, Mutex, OnceLock, RwLock},
 };
 
 const REQUESTS_PER_SECOND: NonZeroU32 = NonZero::new(3).unwrap();
@@ -124,14 +124,38 @@ impl IsUnauthenticated for Unauthenticated {}
 // Callback types
 pub type ClientCallback = Box<dyn Fn(&str, &Properties) + Send + Sync>;
 
+/// State shared between an [`Unauthenticated`] and its derived
+/// [`Authenticated`] client, so the token/device can be edited once and be
+/// visible to every client state.
+#[derive(Debug)]
+pub struct ClientBase {
+    token: RwLock<String>,
+    device_id: RwLock<String>,
+    language: RwLock<Language>,
+    platform: RwLock<Platform>,
+    crossplay: RwLock<bool>,
+    user_agent: RwLock<Option<String>>,
+    http_client: reqwest::Client,
+}
+
+impl Default for ClientBase {
+    fn default() -> Self {
+        Self {
+            token: RwLock::new(String::new()),
+            device_id: RwLock::new(String::new()),
+            language: RwLock::new(Language::default()),
+            platform: RwLock::new(Platform::default()),
+            crossplay: RwLock::new(true),
+            user_agent: RwLock::new(None),
+            http_client: reqwest::Client::new(),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Client<State = Unauthenticated> {
+    base: Arc<ClientBase>,
     self_arc: OnceLock<Arc<Client<State>>>,
-    token: String,
-    device_id: String,
-    language: Language,
-    platform: Platform,
-    crossplay: bool,
     limiter: Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>,
     per_route_limiter: Arc<Mutex<HashMap<String, RouteLimiter>>>,
     tracking: Arc<Mutex<HashMap<String, usize>>>,
@@ -162,11 +186,7 @@ impl<State: Clone + 'static> Client<State> {
             .get_or_init(|| {
                 Arc::new(Self {
                     self_arc: OnceLock::new(),
-                    token: self.token.clone(),
-                    device_id: self.device_id.clone(),
-                    platform: self.platform,
-                    language: self.language,
-                    crossplay: self.crossplay,
+                    base: Arc::clone(&self.base),
                     manifest_route: self.manifest_route.clone(),
                     item_route: self.item_route.clone(),
                     riven_route: self.riven_route.clone(),
@@ -244,26 +264,27 @@ impl<State: Clone + 'static> Client<State> {
         };
 
         // Add the required headers
-        default_headers.insert("language", self.language.as_str().parse().unwrap());
-        default_headers.insert("platform", self.platform.as_str().parse().unwrap());
-        default_headers.insert("crossplay", self.crossplay.to_string().parse().unwrap());
-        default_headers.insert(
-            "User-Agent",
-            format!(
-                "wf-market-rs/{} ({}; {})",
-                env!("CARGO_PKG_VERSION"),
-                self.platform.as_str(),
-                self.language.as_str()
-            )
-            .parse()
-            .unwrap(),
-        );
+        let language = *self.base.language.read().unwrap();
+        let platform = *self.base.platform.read().unwrap();
+        let crossplay = *self.base.crossplay.read().unwrap();
+        default_headers.insert("language", language.as_str().parse().unwrap());
+        default_headers.insert("platform", platform.as_str().parse().unwrap());
+        default_headers.insert("crossplay", crossplay.to_string().parse().unwrap());
+        let user_agent = self
+            .base
+            .user_agent
+            .read()
+            .unwrap()
+            .clone()
+            .unwrap_or_else(|| format!("wf-market/{}", env!("CARGO_PKG_VERSION")));
+        default_headers.insert("User-Agent", user_agent.parse().unwrap());
 
         // If the client is authenticated, add the token to the headers
-        if self.token != "" {
+        let token = self.base.token.read().unwrap().clone();
+        if token != "" {
             default_headers.insert(
                 reqwest::header::AUTHORIZATION,
-                format!("{} {}", prefix, self.token).parse().unwrap(),
+                format!("{} {}", prefix, token).parse().unwrap(),
             );
         }
 
@@ -289,15 +310,14 @@ impl<State: Clone + 'static> Client<State> {
                 })
                 .collect(),
         );
-
-        // Create the HTTP client with the headers
-        let http_client = reqwest::Client::builder()
-            .default_headers(default_headers)
-            .build()
-            .unwrap();
-
+        // Reuse the shared HTTP client (connection pooling) and apply the
+        // request headers per call.
         let method_str = method.as_str().to_owned();
-        let mut builder = http_client.request(method, &url);
+        let mut builder = self
+            .base
+            .http_client
+            .request(method, &url)
+            .headers(default_headers);
         // If the client needs a body, serialize it
         if let Some(b) = body {
             builder = builder.json(&b);
@@ -494,8 +514,8 @@ impl<State: Clone + 'static> Client<State> {
     # Returns
     The client with the language set
     */
-    pub fn with_language(mut self, language: Language) -> Self {
-        self.language = language;
+    pub fn with_language(self, language: Language) -> Self {
+        *self.base.language.write().unwrap() = language;
         self
     }
 
@@ -506,8 +526,8 @@ impl<State: Clone + 'static> Client<State> {
     # Returns
     The client with the platform set
     */
-    pub fn with_platform(mut self, platform: Platform) -> Self {
-        self.platform = platform;
+    pub fn with_platform(self, platform: Platform) -> Self {
+        *self.base.platform.write().unwrap() = platform;
         self
     }
 
@@ -518,9 +538,30 @@ impl<State: Clone + 'static> Client<State> {
     # Returns
     The client with the crossplay setting set
     */
-    pub fn with_crossplay(mut self, crossplay: bool) -> Self {
-        self.crossplay = crossplay;
+    pub fn with_crossplay(self, crossplay: bool) -> Self {
+        *self.base.crossplay.write().unwrap() = crossplay;
         self
+    }
+
+    /**
+    Set the User-Agent header used by the client
+    # Arguments
+    - `user_agent`: The User-Agent string to send with requests
+    # Returns
+    The client with the User-Agent set
+    */
+    pub fn with_user_agent(self, user_agent: impl Into<String>) -> Self {
+        *self.base.user_agent.write().unwrap() = Some(user_agent.into());
+        self
+    }
+
+    /**
+    Set the User-Agent header used by the client
+    # Arguments
+    - `user_agent`: The User-Agent string to send with requests
+    */
+    pub fn set_user_agent(&self, user_agent: impl Into<String>) {
+        *self.base.user_agent.write().unwrap() = Some(user_agent.into());
     }
 
     /**
@@ -698,12 +739,8 @@ impl<State: Clone + 'static> Client<State> {
 impl Client<Unauthenticated> {
     pub fn new() -> Self {
         Self {
+            base: Arc::new(ClientBase::default()),
             self_arc: OnceLock::new(),
-            token: String::new(),
-            device_id: String::new(),
-            language: Language::default(),
-            platform: Platform::default(),
-            crossplay: true,
             manifest_route: OnceLock::new(),
             item_route: OnceLock::new(),
             riven_route: OnceLock::new(),
@@ -744,13 +781,14 @@ impl Client<Unauthenticated> {
         device_id: String,
         refresh: bool,
     ) -> Result<Client<Authenticated>, ApiError> {
+        // Update the shared base so the credentials are visible to both the
+        // unauthenticated client and every authenticated client derived from it.
+        *self.base.token.write().unwrap() = token;
+        *self.base.device_id.write().unwrap() = device_id;
+
         let client = Client::<Authenticated> {
+            base: Arc::clone(&self.base),
             self_arc: OnceLock::new(),
-            token,
-            device_id: device_id.to_string(),
-            platform: self.platform,
-            language: self.language,
-            crossplay: self.crossplay,
             manifest_route: OnceLock::new(),
             item_route: OnceLock::new(),
             riven_route: OnceLock::new(),
@@ -836,8 +874,24 @@ impl Client<Unauthenticated> {
                 .set(AchievementRoute::from_existing(achievement, arc.clone()))
                 .ok();
         }
-        // Return the new authenticated client
 
+        // Attach every route to the Arc before returning the (cloned) client so
+        // that the returned value and the routes share the same route state.
+        // Otherwise `me()` populates the value's route while methods like
+        // `my_auctions()` read the Arc's separate (empty) route.
+        let _ = arc.manifest();
+        let _ = arc.order();
+        let _ = arc.user();
+        let _ = arc.authentication();
+        let _ = arc.lich();
+        let _ = arc.sister();
+        let _ = arc.item();
+        let _ = arc.riven();
+        let _ = arc.chat();
+        let _ = arc.auction();
+        let _ = arc.achievement();
+
+        // Return the new authenticated client
         Ok(Arc::try_unwrap(arc).unwrap_or_else(|arc| (*arc).clone()))
     }
 
@@ -896,6 +950,25 @@ impl Client<Unauthenticated> {
             .await?;
         Ok(new_client)
     }
+
+    /**
+     * Derives an authenticated client from this (unauthenticated) client
+     * without consuming it, sharing the same underlying [`ClientBase`] so the
+     * token/device can be edited once and be visible to every client state.
+     * # Arguments
+     * - `token`: The JWT token to use for authentication
+     * - `device_id`: The device ID to use for authentication
+     * - `refresh`: Whether to refresh the user data after authenticating
+     */
+    pub async fn authenticate(
+        &self,
+        token: &str,
+        device_id: &str,
+        refresh: bool,
+    ) -> Result<Client<Authenticated>, ApiError> {
+        self.create_authenticated_client(token.to_string(), device_id.to_string(), refresh)
+            .await
+    }
 }
 
 impl Client<Authenticated> {
@@ -942,8 +1015,7 @@ impl Client<Authenticated> {
     The users JWT token
     */
     pub fn get_token(&self) -> String {
-        // Only accessible on authed clients, if this panics we got hit by a cosmic particle
-        self.token.clone()
+        self.base.token.read().unwrap().clone()
     }
     /**
     Set the authentication token
@@ -952,8 +1024,8 @@ impl Client<Authenticated> {
     # Returns
     The client with the token set
     */
-    pub fn set_token(&mut self, token: String) {
-        self.token = token;
+    pub fn set_token(&self, token: String) {
+        *self.base.token.write().unwrap() = token;
     }
     /**
     Create a WebSocket builder
@@ -962,7 +1034,8 @@ impl Client<Authenticated> {
     A WsClient Builder
     */
     pub fn create_websocket(&self, version: ApiVersion) -> WsClientBuilder {
-        WsClientBuilder::new(version, self.get_token(), self.get_device_id())
+        let user_agent = self.base.user_agent.read().unwrap().clone();
+        WsClientBuilder::new(version, self.get_token(), self.get_device_id(), user_agent)
     }
     /**
     Returns the clients device id
@@ -971,8 +1044,7 @@ impl Client<Authenticated> {
     The Device ID used when authenticating
     */
     pub fn get_device_id(&self) -> String {
-        // Again, panics, cosmic particle, you get the gist of it now
-        self.device_id.clone()
+        self.base.device_id.read().unwrap().clone()
     }
     /**
     Set the device ID for the client
@@ -981,8 +1053,8 @@ impl Client<Authenticated> {
     # Returns
     The client with the device ID set
     */
-    pub fn set_device_id(&mut self, device_id: &str) {
-        self.device_id = device_id.to_string();
+    pub fn set_device_id(&self, device_id: &str) {
+        *self.base.device_id.write().unwrap() = device_id.to_string();
     }
     /**
     Returns the current internal data
