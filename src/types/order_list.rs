@@ -354,8 +354,9 @@ impl<State: OrderLike + Clone> OrderList<State> {
         // First check buy orders
         for order in orders {
             if order.to_order().id == order_id {
-                let new_quantity = order.to_order().quantity - quantity;
-                if new_quantity <= 0 {
+                // The API has already closed the order; our cache may be stale.
+                let new_quantity = order.to_order().quantity.saturating_sub(quantity);
+                if quantity == 0 || new_quantity == 0 {
                     self.remove_by_id(order_id);
                 } else {
                     order.update(UpdateOrderParams::new().with_quantity(new_quantity));
@@ -498,5 +499,85 @@ impl Display for OrderList<OrderWithUser> {
             self.buy_orders.len()
         ));
         write!(f, "{}", output)
+    }
+}
+
+#[cfg(test)]
+mod quantity_regression_tests {
+    use super::*;
+
+    fn orders(order_type: OrderType, quantity: u32) -> OrderList<Order> {
+        OrderList::new(vec![
+            Order {
+                id: "target".into(),
+                order_type,
+                quantity,
+                ..Order::default()
+            },
+            Order {
+                id: "unrelated".into(),
+                order_type,
+                quantity: 9,
+                ..Order::default()
+            },
+        ])
+    }
+
+    fn remaining(list: &OrderList<Order>, id: &str) -> Option<u32> {
+        list.buy_orders
+            .iter()
+            .chain(list.sell_orders.iter())
+            .find(|order| order.id == id)
+            .map(|order| order.quantity)
+    }
+
+    #[test]
+    fn close_more_than_cached_quantity_removes_order() {
+        for kind in [OrderType::Buy, OrderType::Sell] {
+            let mut list = orders(kind, 1);
+            list.close_order("target", 2);
+            assert_eq!(remaining(&list, "target"), None);
+            assert_eq!(remaining(&list, "unrelated"), Some(9));
+        }
+    }
+
+    #[test]
+    fn close_zero_closes_entire_order() {
+        for kind in [OrderType::Buy, OrderType::Sell] {
+            let mut list = orders(kind, 3);
+            list.close_order("target", 0);
+            assert_eq!(remaining(&list, "target"), None);
+            assert_eq!(remaining(&list, "unrelated"), Some(9));
+        }
+    }
+
+    #[test]
+    fn close_partial_keeps_remaining_quantity() {
+        for kind in [OrderType::Buy, OrderType::Sell] {
+            let mut list = orders(kind, 5);
+            list.close_order("target", 2);
+            assert_eq!(remaining(&list, "target"), Some(3));
+            assert_eq!(remaining(&list, "unrelated"), Some(9));
+        }
+    }
+
+    #[test]
+    fn close_exact_quantity_removes_order() {
+        for kind in [OrderType::Buy, OrderType::Sell] {
+            let mut list = orders(kind, 2);
+            list.close_order("target", 2);
+            assert_eq!(remaining(&list, "target"), None);
+            assert_eq!(remaining(&list, "unrelated"), Some(9));
+        }
+    }
+
+    #[test]
+    fn close_missing_order_preserves_other_orders() {
+        for kind in [OrderType::Buy, OrderType::Sell] {
+            let mut list = orders(kind, 1);
+            list.close_order("missing", u32::MAX);
+            assert_eq!(remaining(&list, "target"), Some(1));
+            assert_eq!(remaining(&list, "unrelated"), Some(9));
+        }
     }
 }
